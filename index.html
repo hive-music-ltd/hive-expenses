@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hive Expenses</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Open+Sauce+Sans:wght@500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{color-scheme:light}
@@ -126,6 +126,34 @@ tbody tr:hover td{background:#fafafa}
 .pend-inv{border-top:1px solid #f0f0f0;padding:10px 14px;background:#fafafa}
 /* Note */
 .note-box{background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:7px 10px;font-size:12px;color:#7a6500;margin-top:4px}
+
+/* ── BRAND PASS ───────────────────────────────────── */
+/* Open Sauce Sans, kerning -65 on body/headers, -55 on sub-headers, */
+/* full stops after large titles, citron secondary accent. */
+/* Casing follows the source (Title Case for headers, sentence case for body); */
+/* CSS only forces UPPERCASE on the small sub-header tier. */
+:root{--teal:#087b7a;--teal-deep:#065f5e;--teal-tint:#e6f4f4;--citron:#c7c804;--citron-dark:#8a8b03;--citron-tint:#fbfbcd;--citron-edge:#e9eaa6}
+body{font-family:'Open Sauce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-weight:500;letter-spacing:-0.065em;font-feature-settings:"tnum" 1}
+input,select,textarea,button{font-family:inherit;letter-spacing:inherit}
+/* Large headers — Title Case in source, tight kerning, full stop after */
+.tbar-t,.st,.et{font-weight:900;letter-spacing:-0.065em}
+.tbar-t{font-size:18px}
+.st{font-size:15px}
+/* Numeric large values keep weight 900; loosen kern slightly so digits breathe */
+.s-val{font-weight:900;letter-spacing:-0.04em}
+/* Small uppercase sub-headers — kerning -55, Medium weight */
+.sb-tag,.s-lbl,.fl,.rtl{letter-spacing:-0.055em;font-weight:500}
+/* Badges — small UPPERCASE labels */
+.badge{text-transform:uppercase;letter-spacing:-0.055em;font-weight:700;font-size:9.5px;padding:3px 8px}
+/* Citron-accent classes */
+.btbd{background:var(--citron-tint);color:var(--citron-dark);border:1px solid var(--citron-edge)}
+.bcit{background:var(--citron-tint);color:var(--citron-dark);border:1px solid var(--citron-edge)}
+.bcit:hover{background:#f1f1a0}
+/* USD accumulated value picks up citron rather than the old olive */
+.s-val.tl{color:var(--citron-dark)}
+/* Slight density polish */
+.stat{padding:14px 16px}
+.tbar{padding:0 22px;height:54px}
 </style>
 </head>
 <body>
@@ -164,6 +192,10 @@ tbody tr:hover td{background:#fafafa}
     document.getElementById('auth-screen').style.display='none';
   }
 })();
+// NOTE: this is a UX gate, not real authentication. The password lives in
+// client JS and can be read by anyone who views source. Anything sensitive
+// must be protected on the server side (e.g. the Apps Script web app's own
+// auth). Fine as a "don't accidentally end up here" speed bump.
 function checkAuth(){
   const val=document.getElementById('auth-input').value;
   if(val==='Hivetest123'){
@@ -190,9 +222,40 @@ const e=id=>document.getElementById(id);
 
 const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
 
+// ── PERSISTENCE ───────────────────────────────────────────
+// Auto-save state to localStorage on every mutation, restore on load.
+// Note: invoice files are base64 data URLs and can fill the ~5MB quota
+// quickly; saveState() will warn via toast if that happens, but the
+// in-memory state survives for the session — Export JSON is the safety
+// net for big invoice attachments.
+const STORAGE_KEY='hive-expenses-state-v1';
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({expenses:S.expenses,runs:S.runs,sheetsUrl:S.sheetsUrl}));
+  }catch(err){
+    console.warn('saveState failed:',err);
+    showToast('⚠ Couldn’t auto-save — storage may be full. Export JSON.');
+  }
+}
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return;
+    const d=JSON.parse(raw);
+    if(Array.isArray(d.expenses))S.expenses=d.expenses;
+    if(Array.isArray(d.runs))S.runs=d.runs;
+    if(typeof d.sheetsUrl==='string')S.sheetsUrl=d.sheetsUrl;
+  }catch(err){
+    console.warn('loadState failed:',err);
+  }
+}
+// Treat undefined/true as "splits assigned" for backward compat with
+// expenses saved before the splitsAssigned flag existed.
+const splitsReady=ex=>ex.splitsAssigned!==false;
+
 function freshForm(init){
-  if(init)return{...init,_isEdit:true,participants:(init.participants||[]).map(p=>({...p,id:uid()})),errors:{}};
-  return{_isEdit:false,id:null,paymentType:'paid',artistName:'',expenseDescription:'',datePaid:todayStr(),amount:'',currency:'GBP',recoupablePercent:100,participants:[{id:uid(),name:'',share:''}],methodPaid:'',invoiceFile:null,note:'',errors:{},saveAnother:false};
+  if(init)return{...init,_isEdit:true,splitsAssigned:init.splitsAssigned!==false,participants:(init.participants||[]).map(p=>({...p,id:uid()})),errors:{}};
+  return{_isEdit:false,id:null,paymentType:'paid',artistName:'',expenseDescription:'',datePaid:todayStr(),amount:'',currency:'GBP',recoupablePercent:100,splitsAssigned:true,participants:[{id:uid(),name:'',share:''}],methodPaid:'',invoiceFile:null,note:'',errors:{},saveAnother:false};
 }
 
 function getParticipantNames(){const n=new Set();S.expenses.forEach(ex=>ex.participants?.forEach(p=>{if(p.name?.trim())n.add(p.name.trim())}));return[...n].sort();}
@@ -206,11 +269,11 @@ const VIEWS=[
   {id:'runs',label:'Payment Runs',ic:'📄'},
 ];
 const PAGE={
-  dashboard:['Dashboard','Overview of your payments'],
-  add:['Add Payment','Log a payment or submit request'],
-  log:['Payments Log','All recorded payments'],
-  pending:['Needs Paying','Pending payment requests'],
-  runs:['Payment Runs','Generate payment request documents'],
+  dashboard:['Dashboard.','Overview of your payments'],
+  add:['Add Payment.','Log a payment or submit request'],
+  log:['Payments Log.','All recorded payments'],
+  pending:['Needs Paying.','Pending payment requests'],
+  runs:['Payment Runs.','Generate payment request documents'],
 };
 
 function renderNav(){
@@ -231,7 +294,7 @@ function setView(v,init){
 function renderAll(){
   renderNav();
   const[title,sub]=PAGE[S.view]||['',''];
-  e('page-title').textContent=S.view==='add'?(S.form?._isEdit?'Edit Payment':'Add Payment'):title;
+  e('page-title').textContent=S.view==='add'?(S.form?._isEdit?'Edit Payment.':'Add Payment.'):title;
   e('page-sub').textContent=S.view==='log'?`${S.expenses.filter(ex=>ex.status==='paid').length} paid entries`:sub;
   let act='';
   if(S.view==='dashboard')act=`<button class="btn bp btn-sm" onclick="setView('add')">＋ Add Payment</button>`;
@@ -255,10 +318,10 @@ function renderDash(){
     <div class="stat"><div class="s-lbl">Pending Requests</div><div class="s-val bk">${pendingItems.length}</div></div>
     <div class="stat"><div class="s-lbl">Payment Runs</div><div class="s-val bk">${S.runs.length}</div></div>
   </div>`;
-  html+=`<div class="dbar"><span>💾 In-memory data — export JSON to preserve between sessions</span><div style="display:flex;gap:7px"><button class="btn bs btn-sm" onclick="exportData()">Export JSON</button><label class="btn bs btn-sm" style="cursor:pointer">Import JSON<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label></div></div>`;
+  html+=`<div class="dbar"><span>💾 Auto-saved to this browser · Export JSON for off-device backup</span><div style="display:flex;gap:7px"><button class="btn bs btn-sm" onclick="exportData()">Export JSON</button><label class="btn bs btn-sm" style="cursor:pointer">Import JSON<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label></div></div>`;
   if(pendingItems.length>0)html+=`<div class="mt-3 card" style="background:#fef2f2;border-color:#fecaca;margin-bottom:14px"><div class="flex aic gap2"><div><div style="font-weight:700;color:#dc2626">⚠ ${pendingItems.length} payment${pendingItems.length!==1?'s':''} awaiting payment</div><div style="font-size:11.5px;color:#888;margin-top:2px">Review and mark as paid when processed</div></div><button class="btn bd btn-sm ml-a" onclick="setView('pending')">Review →</button></div></div>`;
-  html+=`<div class="sh"><div class="st">Recent</div><button class="btn bg btn-sm" onclick="setView('log')">View all →</button></div>`;
-  if(recent.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet</div><div class="es">Add your first payment to get started</div></div></div>`;
+  html+=`<div class="sh"><div class="st">Recent.</div><button class="btn bg btn-sm" onclick="setView('log')">View all →</button></div>`;
+  if(recent.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet.</div><div class="es">Add your first payment to get started</div></div></div>`;
   else{
     html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Recoupable</th><th>Status</th></tr></thead><tbody>`;
     recent.forEach(ex=>{
@@ -355,8 +418,14 @@ function renderAddForm(){
   <div class="divider"></div>
   <div class="flex aic mb-3" style="justify-content:space-between">
     <div style="font-size:13px;font-weight:900">Participant Splits</div>
-    <button class="btn bs btn-sm" onclick="addParticipant()">＋ Add Participant</button>
+    <div class="flex gap2">
+      <button class="btn ${f.splitsAssigned?'bs':'bcit'} btn-sm" onclick="toggleSplitsAssigned()" title="Toggle whether splits are known yet">${f.splitsAssigned?'Splits TBD':'✓ Splits TBD'}</button>
+      ${f.splitsAssigned?`<button class="btn bs btn-sm" onclick="addParticipant()">＋ Add Participant</button>`:''}
+    </div>
   </div>
+  ${!f.splitsAssigned?`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:10px 12px;font-size:12px;color:#7a6500;line-height:1.55">
+    ⏳ <strong>Splits not assigned yet.</strong> This expense will be saved without participant splits. It won’t appear in payment runs until you come back and assign them.
+  </div>`:`
   <datalist id="pname-dl">${pNames.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
   <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-left:3px solid #087b7a;border-radius:5px;padding:7px 11px;font-size:11.5px;color:#555;margin-bottom:10px">✎ Use each participant's <strong>full legal name</strong> — double-check spelling before saving</div>
   ${f.errors.participants?`<div style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:7px 11px;font-size:12px;margin-bottom:8px">${f.errors.participants}</div>`:''}
@@ -370,7 +439,7 @@ function renderAddForm(){
     </div>`).join('')}
   </div>
   ${f.participants.length>0?`<div class="pt ${pClass}" id="part-total"><span>${pMsg}</span><strong>${pTotal.toFixed(4)}%</strong></div>`:''}
-  ${f.errors.partTotal?`<span class="fe">${f.errors.partTotal}</span>`:''}
+  ${f.errors.partTotal?`<span class="fe">${f.errors.partTotal}</span>`:''}`}
   <div class="divider"></div>
   <div class="fg" style="margin-bottom:12px">
     <label class="fl">Note (optional)</label>
@@ -389,7 +458,14 @@ function renderAddForm(){
   attachFormListeners();
 }
 
+// #content is a persistent element — its children are replaced on render
+// but the element itself isn't, so we only need to attach this listener
+// once. Previously this was called on every renderAddForm(), which stacked
+// up duplicate listeners on every re-render.
+let _formListenersAttached=false;
 function attachFormListeners(){
+  if(_formListenersAttached)return;
+  _formListenersAttached=true;
   e('content').addEventListener('input',ev=>{
     const field=ev.target.dataset.field;
     if(!field||!S.form)return;
@@ -415,6 +491,7 @@ function updatePartTotal(){
 }
 
 function setFF(field,val){if(!S.form)return;syncFormInputs();S.form[field]=val;renderAddForm();}
+function toggleSplitsAssigned(){if(!S.form)return;syncFormInputs();S.form.splitsAssigned=!S.form.splitsAssigned;renderAddForm();}
 function addParticipant(){if(!S.form)return;syncFormInputs();S.form.participants.push({id:uid(),name:'',share:''});renderAddForm();setTimeout(()=>{const inputs=document.querySelectorAll('[data-field^="pname-"]');if(inputs.length)inputs[inputs.length-1].focus();},50);}
 function removeParticipant(idx){if(!S.form)return;syncFormInputs();S.form.participants.splice(idx,1);renderAddForm();}
 function clearInvoice(){if(S.form){S.form.invoiceFile=null;renderAddForm();}}
@@ -447,10 +524,13 @@ function submitForm(){
   if(!f.artistName.trim())errs.artistName='Required';
   if(!f.expenseDescription.trim())errs.expenseDescription='Required';
   if(!f.amount||isNaN(f.amount)||parseFloat(f.amount)<=0)errs.amount='Enter a valid amount';
-  if(f.participants.length===0)errs.participants='Add at least one participant';
-  if(f.participants.some(p=>!p.name.trim()))errs.participants='All participants need a name';
-  const total=f.participants.reduce((s,p)=>s+(parseFloat(p.share)||0),0);
-  if(Math.abs(total-100)>0.001)errs.partTotal=`Shares must total 100% (currently ${total.toFixed(4)}%)`;
+  // Skip participant validation when splits are deliberately deferred.
+  if(f.splitsAssigned){
+    if(f.participants.length===0)errs.participants='Add at least one participant';
+    if(f.participants.some(p=>!p.name.trim()))errs.participants='All participants need a name';
+    const total=f.participants.reduce((s,p)=>s+(parseFloat(p.share)||0),0);
+    if(Math.abs(total-100)>0.001)errs.partTotal=`Shares must total 100% (currently ${total.toFixed(4)}%)`;
+  }
   if(f.paymentType==='pending'&&!f.invoiceFile)errs.invoiceFile='Please attach an invoice';
   if(Object.keys(errs).length>0){S.form.errors=errs;renderAddForm();return;}
   const recoupableAmount=parseFloat(f.amount)*f.recoupablePercent/100;
@@ -462,14 +542,15 @@ function submitForm(){
     datePaid:f.paymentType==='paid'?f.datePaid:null,
     amount:parseFloat(f.amount),currency:f.currency,
     recoupablePercent:f.recoupablePercent,recoupableAmount,
-    participants:f.participants.map(p=>({name:p.name.trim(),share:parseFloat(p.share)})),
+    splitsAssigned:f.splitsAssigned!==false,
+    participants:f.splitsAssigned===false?[]:f.participants.map(p=>({name:p.name.trim(),share:parseFloat(p.share)})),
     methodPaid:f.paymentType==='paid'?f.methodPaid:'',
     invoiceFile:f.paymentType==='pending'?f.invoiceFile:null,
     note:f.note.trim(),
     runId:f._isEdit?f.runId:null,
   };
-  if(f._isEdit){S.expenses=S.expenses.map(ex=>ex.id===exp.id?exp:ex);showToast('Payment updated');setView('log');}
-  else{S.expenses.push(exp);showToast(f.paymentType==='paid'?'Payment logged':'Payment request submitted');if(f.saveAnother){S.form=freshForm();renderAddForm();}else{setView(f.paymentType==='pending'?'pending':'dashboard');}}
+  if(f._isEdit){S.expenses=S.expenses.map(ex=>ex.id===exp.id?exp:ex);saveState();showToast('Payment updated');setView('log');}
+  else{S.expenses.push(exp);saveState();showToast(f.paymentType==='paid'?'Payment logged':'Payment request submitted');if(f.saveAnother){S.form=freshForm();renderAddForm();}else{setView(f.paymentType==='pending'?'pending':'dashboard');}}
 }
 
 // ── PAYMENTS LOG ──────────────────────────────────────────
@@ -490,7 +571,7 @@ function renderLog(){
   </div>`;
 
   if(S.expenses.filter(ex=>ex.status==='paid').length===0){
-    html+=`<div class="empty"><div class="ei">📋</div><div class="et">No paid payments yet</div><div class="es">Logged payments appear here</div></div>`;
+    html+=`<div class="empty"><div class="ei">📋</div><div class="et">No paid payments yet.</div><div class="es">Logged payments appear here</div></div>`;
     e('content').innerHTML=html;return;
   }
 
@@ -509,7 +590,7 @@ function renderLog(){
       <td><span class="badge ${ex.recoupablePercent===100?'bpk':'bam'}">${ex.recoupablePercent}%</span></td>
       <td style="font-weight:700;color:#087b7a;white-space:nowrap">${fmtAmt(ex.recoupableAmount,ex.currency)}</td>
       <td style="font-size:11px;color:#666">${ex.methodPaid||'—'}</td>
-      <td><button class="btn bg btn-xs" onclick="S.expandedId=S.expandedId==='${ex.id}'?null:'${ex.id}';renderLog()">${(ex.participants||[]).length}p ${isExp?'▲':'▼'}</button></td>
+      <td>${splitsReady(ex)?`<button class="btn bg btn-xs" onclick="S.expandedId=S.expandedId==='${ex.id}'?null:'${ex.id}';renderLog()">${(ex.participants||[]).length}p ${isExp?'▲':'▼'}</button>`:`<span class="badge btbd" title="Splits not assigned yet">Splits TBD</span>`}</td>
       <td>${run?`<span class="badge bgr" style="font-size:10px;cursor:pointer" onclick="viewReport('${run.id}')">${esc(run.name.substring(0,18))}…</span>`:`<span class="badge bgy">Unsubmitted</span>`}</td>
       <td><div class="flex gap2">${!ex.runId?`<button class="btn bg btn-xs" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">Edit</button><button class="btn bd btn-xs" onclick="delPayment('${ex.id}')">🗑</button>`:''}</div></td>
     </tr>`;
@@ -529,7 +610,7 @@ function renderLog(){
 function renderPending(){
   const items=S.expenses.filter(ex=>ex.status==='pending');
   if(items.length===0){
-    e('content').innerHTML=`<div class="empty"><div class="ei">✅</div><div class="et">All clear</div><div class="es">No pending payment requests</div></div>`;
+    e('content').innerHTML=`<div class="empty"><div class="ei">✅</div><div class="et">All clear.</div><div class="es">No pending payment requests</div></div>`;
     return;
   }
   let html=`<div style="margin-bottom:12px;font-size:12px;color:#888">${items.length} payment${items.length!==1?'s':''} awaiting processing</div>`;
@@ -539,10 +620,10 @@ function renderPending(){
       <div class="pend-h">
         <div style="flex:1">
           <div style="font-weight:700">${esc(ex.artistName)} — ${esc(ex.expenseDescription)}</div>
-          <div class="pend-meta">Requested ${fmtDate(ex.createdAt?.split('T')[0])} · ${(ex.participants||[]).length} participant${(ex.participants||[]).length!==1?'s':''} · ${ex.recoupablePercent}% recoupable</div>
+          <div class="pend-meta">Requested ${fmtDate(ex.createdAt?.split('T')[0])} · ${splitsReady(ex)?`${(ex.participants||[]).length} participant${(ex.participants||[]).length!==1?'s':''}`:'splits TBD'} · ${ex.recoupablePercent}% recoupable</div>
           ${ex.note?`<div class="note-box" style="margin-top:6px">📝 ${esc(ex.note)}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap">
-            ${(ex.participants||[]).map(p=>`<span style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888">${p.share}%</span></span>`).join('')}
+            ${splitsReady(ex)?(ex.participants||[]).map(p=>`<span style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888">${p.share}%</span></span>`).join(''):`<span class="badge btbd" title="Splits not assigned yet">Splits TBD</span>`}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -591,6 +672,7 @@ function confirmMarkPaid(id){
   const dp=e('mp-date')?.value;const mp=e('mp-method')?.value;
   if(!dp){showToast('Please enter a date');return;}
   S.expenses=S.expenses.map(ex=>ex.id===id?{...ex,status:'paid',datePaid:dp,methodPaid:mp}:ex);
+  saveState();
   closeModal();showToast('Payment marked as paid');renderNav();
   if(S.view==='pending')renderPending();
 }
@@ -598,12 +680,16 @@ function confirmMarkPaid(id){
 function delPayment(id){
   if(!confirm('Delete this payment?'))return;
   S.expenses=S.expenses.filter(ex=>ex.id!==id);
+  saveState();
   showToast('Deleted');renderLog();
 }
 
 // ── PAYMENT RUNS ──────────────────────────────────────────
 function renderRuns(){
-  const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId);
+  // Only paid expenses that have splits assigned can be added to a run —
+  // the .docx report needs participant rows to be useful.
+  const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&splitsReady(ex));
+  const paidTbd=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&!splitsReady(ex));
   if(S.creating){
     const{name,selectedIds}=S.runForm;
     const sel=paidUnsubmitted.filter(ex=>selectedIds.includes(ex.id));
@@ -617,6 +703,7 @@ function renderRuns(){
         <div style="font-size:13px;font-weight:700">Select Paid Expenses</div>
         <button class="btn bg btn-sm" onclick="S.runForm.selectedIds=S.runForm.selectedIds.length===${paidUnsubmitted.length}?[]:${JSON.stringify(paidUnsubmitted.map(ex=>ex.id))};renderRuns()">${selectedIds.length===paidUnsubmitted.length?'Deselect all':'Select all'}</button>
       </div>`;
+    if(paidTbd.length>0)html+=`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#7a6500;margin-bottom:10px">⏳ ${paidTbd.length} paid expense${paidTbd.length!==1?'s':''} excluded — splits not assigned yet. Edit them from the Payments Log to include them.</div>`;
     if(paidUnsubmitted.length===0)html+=`<div style="padding:16px;text-align:center;color:#bbb;font-size:12.5px">No unsubmitted paid expenses available</div>`;
     else{
       html+=`<div style="border:1px solid #e5e5e5;border-radius:7px;overflow:hidden">`;
@@ -634,9 +721,9 @@ function renderRuns(){
     </div></div></div>`;
     e('content').innerHTML=html;return;
   }
-  let html=`<div class="sh"><div><div class="st">Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid expenses</div>`:''}</div>
+  let html=`<div class="sh"><div><div class="st">Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid expense${paidUnsubmitted.length!==1?'s':''}${paidTbd.length>0?` · ${paidTbd.length} pending splits`:''}</div>`:paidTbd.length>0?`<div class="ss">${paidTbd.length} paid expense${paidTbd.length!==1?'s':''} waiting on splits</div>`:''}</div>
     <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="S.creating=true;renderRuns()">＋ New Run</button></div>`;
-  if(S.runs.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No runs yet</div><div class="es">Log paid expenses first, then create a run</div></div>`;
+  if(S.runs.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No runs yet.</div><div class="es">Log paid expenses first, then create a run</div></div>`;
   [...S.runs].reverse().forEach(run=>{
     const runExps=S.expenses.filter(ex=>ex.runId===run.id);
     html+=`<div class="rc"><div class="rc-h">
@@ -669,6 +756,7 @@ function createRun(){
   const run={id:uid(),createdAt:new Date().toISOString(),name:name.trim(),expenseIds:[...selectedIds],totalGBP,totalUSD};
   S.runs.push(run);
   S.expenses=S.expenses.map(ex=>selectedIds.includes(ex.id)?{...ex,runId:run.id}:ex);
+  saveState();
   S.creating=false;S.runForm={name:'',selectedIds:[]};
   showToast('Run created');
   viewReport(run.id);
@@ -863,8 +951,14 @@ async function downloadDocx(runId){
   try{
     const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=`${run.name}.docx`;a.click();
-    URL.revokeObjectURL(url);showToast('Document downloaded');
+    // Strip filesystem-unsafe chars from the run name so e.g. a slash
+    // doesn't produce a malformed download filename.
+    const safeName=(run.name||'payment-run').replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim().slice(0,100)||'payment-run';
+    const a=document.createElement('a');a.href=url;a.download=`${safeName}.docx`;a.click();
+    // Defer revoke — Firefox can race the download if revoke fires before
+    // the browser starts the transfer.
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    showToast('Document downloaded');
   }catch(err){showToast('Error generating document: '+err.message);}
 }
 
@@ -874,7 +968,8 @@ function exportData(){
   const blob=new Blob([data],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='hive-expenses-backup.json';a.click();
-  URL.revokeObjectURL(url);showToast('Data exported');
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast('Data exported');
 }
 
 function importData(ev){
@@ -885,6 +980,7 @@ function importData(ev){
       if(d.expenses)S.expenses=d.expenses;
       if(d.runs)S.runs=d.runs;
       if(d.sheetsUrl)S.sheetsUrl=d.sheetsUrl;
+      saveState();
       showToast(`Imported ${S.expenses.length} expenses, ${S.runs.length} runs`);
       renderAll();
     }catch{showToast('Error reading file');}
@@ -927,8 +1023,13 @@ function openSheetsSetup(){
 function saveSheetsUrl(){
   const url=(e('sheets-url-input')?.value||'').trim();
   if(!url){showToast('Please enter a URL');return;}
-  if(!url.includes('script.google.com')){showToast("That doesn't look like an Apps Script URL");return;}
-  S.sheetsUrl=url;closeModal();syncToSheets();
+  // Parse properly — substring matching lets a hostile URL like
+  // https://evil.example/?x=script.google.com slip through.
+  let host;
+  try{host=new URL(url).hostname;}
+  catch{showToast("That doesn't look like a valid URL");return;}
+  if(host!=='script.google.com'){showToast("That doesn't look like an Apps Script URL");return;}
+  S.sheetsUrl=url;saveState();closeModal();syncToSheets();
 }
 function syncToSheets(){
   if(!S.sheetsUrl){openSheetsSetup();return;}
@@ -941,8 +1042,14 @@ function syncToSheets(){
   };
   showToast('Syncing…');
   fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheetsUrl:S.sheetsUrl,data:payload})})
-    .then(r=>r.json())
-    .then(()=>{const now=new Date();S.lastSynced=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');showToast('Synced to Google Sheets ✓');if(S.view==='log')renderLog();})
+    .then(async r=>{const j=await r.json().catch(()=>({}));return{httpOk:r.ok,body:j};})
+    .then(({httpOk,body})=>{
+      if(!httpOk||body.ok===false){showToast('Sync failed — '+(body.error||('upstream returned '+(body.status||'error'))));return;}
+      const now=new Date();
+      S.lastSynced=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+      showToast('Synced to Google Sheets ✓');
+      if(S.view==='log')renderLog();
+    })
     .catch(()=>showToast('Sync failed — check your URL'));
 }
 
@@ -951,6 +1058,7 @@ document.getElementById('nav').addEventListener('click',ev=>{
   if(nav)setView(nav.dataset.nav);
 });
 
+loadState();
 renderAll();
 </script>
 </body>
