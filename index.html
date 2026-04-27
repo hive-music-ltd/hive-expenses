@@ -117,6 +117,7 @@ tbody tr:hover td{background:#fafafa}
 /* Invoice upload */
 .inv-area{border:2px dashed #d0d0d0;border-radius:7px;padding:14px;text-align:center;cursor:pointer;transition:border-color .15s;background:#fafafa}
 .inv-area:hover{border-color:#087b7a;background:#f0fbfb}
+.inv-area.dragging{border-color:#087b7a;background:#e6f4f4;border-style:solid}
 .inv-area input{display:none}
 .inv-name{background:#e6f4f4;color:#087b7a;border:1px solid #b3d9d8;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}
 /* Pending items */
@@ -284,12 +285,36 @@ function renderNav(){
   }).join('');
 }
 
-function setView(v,init){
+// Push/replace browser history so back & forward buttons walk through views.
+// Edit-form payloads are kept in a tiny in-memory map keyed by a token in the
+// hash, so the URL stays clean and we don't have to JSON-serialise into it.
+const _historyInits={};
+function setView(v,init,opts={}){
   S.view=v;
   if(v==='add')S.form=freshForm(init||null);
   if(v==='runs'){S.creating=false;S.runForm={name:'',selectedIds:[]};}
   renderAll();
+  if(opts.skipHistory)return;
+  let hash='#'+v;
+  if(v==='add'&&init){
+    const tok=Date.now().toString(36);
+    _historyInits[tok]=init;
+    hash+='?init='+tok;
+  }
+  if(location.hash===hash)return;
+  history.pushState({view:v,init:init?'_inited':null},'',hash);
 }
+function _viewFromHash(){
+  const m=(location.hash||'').match(/^#([^?]+)(?:\?init=(.+))?$/);
+  if(!m)return{view:'dashboard',init:null};
+  const view=m[1];
+  const init=m[2]?_historyInits[m[2]]||null:null;
+  return{view,init};
+}
+window.addEventListener('popstate',()=>{
+  const{view,init}=_viewFromHash();
+  setView(view,init,{skipHistory:true});
+});
 
 function renderAll(){
   renderNav();
@@ -309,22 +334,21 @@ function renderAll(){
 function renderDash(){
   const paid=S.expenses.filter(ex=>ex.status==='paid');
   const pendingItems=S.expenses.filter(ex=>ex.status==='pending');
-  const gbp=paid.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
-  const usd=paid.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
-  const recent=[...S.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5);
+  // Dashboard accumulated values are gross expense totals — the recoupable
+  // % stays attached to each expense and shows in the row badge, the docx
+  // output, and the Sheets sync payload.
+  const gbp=paid.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+(ex.amount||0),0);
+  const usd=paid.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+(ex.amount||0),0);
+  const all=[...S.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   let html=`<div class="stats">
-    <div class="stat"><div class="s-lbl">Accumulated £ Recoupable</div><div class="s-val pk">${fmtAmt(gbp,'GBP')}</div></div>
-    <div class="stat"><div class="s-lbl">Accumulated $ Recoupable</div><div class="s-val tl">${fmtAmt(usd,'USD')}</div></div>
-    <div class="stat"><div class="s-lbl">Pending Requests</div><div class="s-val bk">${pendingItems.length}</div></div>
-    <div class="stat"><div class="s-lbl">Payment Runs</div><div class="s-val bk">${S.runs.length}</div></div>
+    <div class="stat"><div class="s-lbl">Accumulated £</div><div class="s-val pk">${fmtAmt(gbp,'GBP')}</div></div>
+    <div class="stat"><div class="s-lbl">Accumulated $</div><div class="s-val tl">${fmtAmt(usd,'USD')}</div></div>
   </div>`;
-  html+=`<div class="dbar"><span>💾 Auto-saved to this browser · Export JSON for off-device backup</span><div style="display:flex;gap:7px"><button class="btn bs btn-sm" onclick="exportData()">Export JSON</button><label class="btn bs btn-sm" style="cursor:pointer">Import JSON<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label></div></div>`;
-  if(pendingItems.length>0)html+=`<div class="mt-3 card" style="background:#fef2f2;border-color:#fecaca;margin-bottom:14px"><div class="flex aic gap2"><div><div style="font-weight:700;color:#dc2626">⚠ ${pendingItems.length} payment${pendingItems.length!==1?'s':''} awaiting payment</div><div style="font-size:11.5px;color:#888;margin-top:2px">Review and mark as paid when processed</div></div><button class="btn bd btn-sm ml-a" onclick="setView('pending')">Review →</button></div></div>`;
-  html+=`<div class="sh"><div class="st">Recent.</div><button class="btn bg btn-sm" onclick="setView('log')">View all →</button></div>`;
-  if(recent.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet.</div><div class="es">Add your first payment to get started</div></div></div>`;
+  html+=`<div class="sh"><div class="st">All Entries.</div></div>`;
+  if(all.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet.</div><div class="es">Add your first payment to get started</div></div></div>`;
   else{
     html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Recoupable</th><th>Status</th></tr></thead><tbody>`;
-    recent.forEach(ex=>{
+    all.forEach(ex=>{
       const run=ex.runId?S.runs.find(r=>r.id===ex.runId):null;
       html+=`<tr style="cursor:pointer" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">
         <td style="color:#888;font-size:11.5px;white-space:nowrap">${fmtDate(ex.datePaid||ex.date)}</td>
@@ -407,11 +431,11 @@ function renderAddForm(){
   ${!isPaid?`<div class="fg">
     <label class="fl">Invoice *</label>
     <div style="font-size:11.5px;color:#7a6500;background:#fffdf0;border:1px solid #f0e68c;border-radius:5px;padding:6px 10px;margin-bottom:7px">💡 Make sure bank details are on the invoice before uploading</div>
-    <label class="inv-area">
+    <label class="inv-area" ondragover="event.preventDefault();this.classList.add('dragging')" ondragleave="this.classList.remove('dragging')" ondrop="this.classList.remove('dragging');handleInvoiceDrop(event)">
       <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="handleInvoiceUpload(event)">
       ${f.invoiceFile
         ?`<div class="inv-name">📎 ${esc(f.invoiceFile.name)} <span style="margin-left:auto;cursor:pointer;opacity:.6" onclick="event.preventDefault();clearInvoice()">✕</span></div>`
-        :`<div style="font-size:12px;color:#888"><strong style="color:#555">Click to attach invoice</strong><br>PDF, image or document</div>`}
+        :`<div style="font-size:12px;color:#888"><strong style="color:#555">Click to attach invoice</strong> or drop a file here<br>PDF, image or document</div>`}
     </label>
     ${f.errors.invoiceFile?`<span class="fe">${f.errors.invoiceFile}</span>`:''}
   </div>`:''}
@@ -498,6 +522,15 @@ function clearInvoice(){if(S.form){S.form.invoiceFile=null;renderAddForm();}}
 
 function handleInvoiceUpload(ev){
   const file=ev.target.files[0];if(!file)return;
+  _readInvoiceFile(file);
+}
+function handleInvoiceDrop(ev){
+  ev.preventDefault();
+  const file=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];
+  if(!file)return;
+  _readInvoiceFile(file);
+}
+function _readInvoiceFile(file){
   const reader=new FileReader();
   reader.onload=evt=>{if(S.form){S.form.invoiceFile={name:file.name,data:evt.target.result,type:file.type};renderAddForm();}};
   reader.readAsDataURL(file);
@@ -731,6 +764,7 @@ function renderRuns(){
       <div class="flex gap2">
         <button class="btn bt btn-sm" onclick="viewReport('${run.id}')">👁 Preview</button>
         <button class="btn bp btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download .docx</button>
+        <button class="btn bd btn-sm" onclick="deleteRun('${run.id}')" title="Reverse this run and put its payments back to Unsubmitted">↶ Reverse</button>
       </div>
     </div><div class="rc-b"><div class="rtots">
       ${run.totalGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(run.totalGBP,'GBP')}</div></div>`:''}
@@ -745,6 +779,17 @@ function toggleRunExp(id){
   const ids=S.runForm.selectedIds;
   S.runForm.selectedIds=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];
   renderRuns();setTimeout(()=>{const inp=e('run-name-input');if(inp)inp.value=S.runForm.name;},10);
+}
+
+function deleteRun(runId){
+  const run=S.runs.find(r=>r.id===runId);if(!run)return;
+  const linked=S.expenses.filter(ex=>ex.runId===runId).length;
+  if(!confirm(`Reverse "${run.name}"? ${linked} payment${linked!==1?'s':''} will return to Unsubmitted and the run will be removed.`))return;
+  S.expenses=S.expenses.map(ex=>ex.runId===runId?{...ex,runId:null}:ex);
+  S.runs=S.runs.filter(r=>r.id!==runId);
+  saveState();
+  showToast('Run reversed');
+  renderRuns();
 }
 
 function createRun(){
@@ -1059,6 +1104,14 @@ document.getElementById('nav').addEventListener('click',ev=>{
 });
 
 loadState();
+// If the URL hash already names a view (e.g. user reloaded on /#log), honour
+// it; otherwise replace the empty hash with the current default so back/
+// forward has a starting anchor to compare against.
+{
+  const h=_viewFromHash();
+  if(h.view&&h.view!==S.view){S.view=h.view;}
+  history.replaceState({view:S.view},'','#'+S.view);
+}
 renderAll();
 </script>
 </body>
