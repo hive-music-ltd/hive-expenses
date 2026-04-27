@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hive Expenses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{color-scheme:light}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.5;background:#f2f2f2;color:#111;height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+.layout{display:flex;height:100vh;overflow:hidden}
+.sb{width:190px;min-width:190px;background:#0d0d0d;color:#fff;display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:14px 14px 12px;border-bottom:1px solid #1e1e1e}
+.sb-logo{display:flex;align-items:center;gap:9px}
+.sb-tag{font-size:9.5px;color:#444;letter-spacing:.1em;text-transform:uppercase;font-weight:500;margin-top:4px}
+.sb-nav{flex:1;padding:10px 7px;overflow-y:auto}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:6px;cursor:pointer;color:#666;font-size:12.5px;font-weight:500;margin-bottom:2px;transition:all .15s;user-select:none;position:relative}
+.ni:hover{background:#1a1a1a;color:#ddd}
+.ni.on{background:rgba(8,123,122,.15);color:#087b7a}
+.nb{margin-left:auto;background:#087b7a;color:#fff;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:100px}
+.nb-red{background:#dc2626}
+.sb-foot{padding:10px 14px;border-top:1px solid #191919;font-size:10px;color:#2a2a2a}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.tbar{background:#fff;padding:0 20px;height:52px;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tbar-t{font-size:15px;font-weight:900;letter-spacing:-.02em}
+.tbar-s{font-size:11px;color:#888;margin-top:1px}
+.ct{flex:1;overflow-y:auto;padding:16px 20px}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:14px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:12px 14px}
+.s-lbl{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:3px}
+.s-val{font-size:19px;font-weight:900;line-height:1.1;letter-spacing:-.02em}
+.s-val.pk{color:#087b7a}.s-val.tl{color:#5e7a00}.s-val.bk{color:#111}
+.s-sub{font-size:10.5px;color:#aaa;margin-top:2px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;outline:none;font-family:inherit;white-space:nowrap;transition:all .15s}
+.bp{background:#087b7a;color:#fff}.bp:hover{background:#065f5e}
+.bs{background:#f3f3f3;color:#333;border:1px solid #e0e0e0}.bs:hover{background:#e8e8e8}
+.bg{background:transparent;color:#666}.bg:hover{background:#f0f0f0;color:#333}
+.bd{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}.bd:hover{background:#fee2e2}
+.bt{background:#e6f4f4;color:#087b7a;border:1px solid #b3d9d8}.bt:hover{background:#d0eceb}
+.btn-sm{padding:4px 10px;font-size:11.5px;border-radius:5px}
+.btn-xs{padding:2px 7px;font-size:11px;border-radius:4px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.fg{display:flex;flex-direction:column;gap:3px;margin-bottom:12px}
+.fl{font-size:10px;font-weight:700;color:#555;letter-spacing:.07em;text-transform:uppercase}
+.fi{background:#fff;border:1px solid #d0d0d0;border-radius:6px;padding:7px 10px;font-size:13.5px;color:#111;font-family:inherit;outline:none;transition:border-color .15s;width:100%}
+.fi:focus{border-color:#087b7a;box-shadow:0 0 0 2px rgba(8,123,122,.08)}
+.fi::placeholder{color:#bbb}
+.fe{font-size:11px;color:#dc2626;margin-top:2px}
+.seg{display:flex;background:#f3f3f3;border:1px solid #e0e0e0;border-radius:6px;padding:2px;gap:2px}
+.so{flex:1;padding:5px 8px;text-align:center;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#666;transition:all .15s;user-select:none}
+.so.on{background:#087b7a;color:#fff}
+.so:not(.on):hover{background:#e8e8e8;color:#333}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#888;border-bottom:1px solid #e5e5e5;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#fafafa}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:100px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.bpk{background:#e6f4f4;color:#087b7a}.btl{background:#f2f5d0;color:#5e7a00}.bgr{background:#f0fdf4;color:#16a34a}.bam{background:#fffbeb;color:#d97706}.bgy{background:#f3f3f3;color:#888}.brd{background:#fef2f2;color:#dc2626}
+.pr{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.pn{font-size:10.5px;color:#bbb;width:16px;text-align:right;flex-shrink:0}
+.pi{flex:1}
+.ps{width:72px;flex-shrink:0;text-align:right}
+.pp{font-size:12px;color:#888;flex-shrink:0}
+.prm{background:none;border:none;cursor:pointer;color:#ccc;padding:4px;border-radius:4px;display:flex;align-items:center;transition:color .15s;flex-shrink:0}
+.prm:hover{color:#dc2626}
+.pt{padding:7px 11px;border-radius:6px;font-size:12px;font-weight:600;display:flex;align-items:justify-content:space-between;margin-bottom:8px}
+.pt.ok{background:#f0fdf4;color:#16a34a}.pt.warn{background:#fffbeb;color:#d97706}.pt.over{background:#fef2f2;color:#dc2626}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.toast{position:fixed;top:12px;right:12px;background:#111;color:#fff;padding:9px 14px;border-radius:7px;font-size:12.5px;font-weight:500;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+.empty{text-align:center;padding:36px 16px}
+.ei{font-size:28px;margin-bottom:8px;opacity:.35}.et{font-size:13px;font-weight:600;color:#888;margin-bottom:3px}.es{font-size:11.5px;color:#bbb}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.st{font-size:13.5px;font-weight:900;letter-spacing:-.02em}.ss{font-size:11px;color:#888;margin-top:1px}
+.cb{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-bottom:1px solid #f0f0f0}
+.cb:last-child{border-bottom:none}
+.cb input[type=checkbox]{accent-color:#087b7a;width:13px;height:13px;margin-top:2px;flex-shrink:0;cursor:pointer}
+.cbl{flex:1;cursor:pointer}.cbm{font-size:12.5px;font-weight:500}.cbs{font-size:11px;color:#888;margin-top:1px}.cba{font-size:12.5px;font-weight:700;color:#087b7a;flex-shrink:0}
+.rc{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:10px;overflow:hidden}
+.rc-h{padding:12px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
+.rc-b{padding:12px 14px}
+.rtots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.rtot{background:#f8f8f8;border-radius:6px;padding:10px}
+.rtl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:2px}
+.rtv{font-size:18px;font-weight:800}
+.dbar{background:#e6f4f4;border:1px solid #b3d9d8;border-radius:6px;padding:9px 13px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:#888;flex-wrap:wrap;gap:7px}
+.divider{height:1px;background:#f0f0f0;margin:14px 0}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.modal{background:#fff;border-radius:10px;max-width:780px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-head{padding:16px 20px;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1}
+.modal-body{padding:20px;font-family:Arial,sans-serif;font-size:11pt;color:#000}
+.report-tbl{width:100%;border-collapse:collapse;font-size:10.5pt;margin:14px 0}
+.report-tbl th{background:#000;color:#fff;font-weight:bold;padding:7px 10px;border:1px solid #ccc;font-size:10pt}
+.report-tbl td{padding:7px 10px;border:1px solid #ccc;vertical-align:top}
+.wire-tbl{border-collapse:collapse;width:100%;margin-top:10px}
+.wire-tbl td{padding:5px 0;border-bottom:1px solid #eee;font-size:10.5pt}
+.wire-tbl td:first-child{font-weight:bold;width:200px}
+.ml-a{margin-left:auto}
+.mt-3{margin-top:12px}.mt-2{margin-top:8px}.mb-3{margin-bottom:12px}
+.flex{display:flex}.aic{align-items:center}.gap2{gap:8px}.fw7{font-weight:700}
+.text-muted{color:#888}.text-sm{font-size:11.5px}
+/* Payment type toggle */
+.ptt{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:14px}
+.pto{padding:12px 14px;cursor:pointer;transition:all .15s;user-select:none;border-right:1px solid #e0e0e0}
+.pto:last-child{border-right:none}
+.pto.on{background:#e6f4f4}
+.pto:not(.on){background:#fafafa}
+.pto:not(.on):hover{background:#f3f3f3}
+.pto-lbl{font-size:13px;font-weight:700;color:#333}
+.pto.on .pto-lbl{color:#087b7a}
+.pto-sub{font-size:11px;color:#888;margin-top:2px}
+/* Invoice upload */
+.inv-area{border:2px dashed #d0d0d0;border-radius:7px;padding:14px;text-align:center;cursor:pointer;transition:border-color .15s;background:#fafafa}
+.inv-area:hover{border-color:#087b7a;background:#f0fbfb}
+.inv-area input{display:none}
+.inv-name{background:#e6f4f4;color:#087b7a;border:1px solid #b3d9d8;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}
+/* Pending items */
+.pend-card{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:10px;overflow:hidden}
+.pend-h{padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.pend-meta{font-size:11px;color:#888;margin-top:3px}
+.pend-inv{border-top:1px solid #f0f0f0;padding:10px 14px;background:#fafafa}
+/* Note */
+.note-box{background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:7px 10px;font-size:12px;color:#7a6500;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sb">
+    <div class="sb-head">
+      <div class="sb-logo"><img src="data:image/png;base64,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" alt="Hive" style="width:36px;height:auto;object-fit:contain;display:block"></div>
+      <div class="sb-tag">Expenses</div>
+    </div>
+    <nav class="sb-nav" id="nav"></nav>
+    <div class="sb-foot">Hive Music Limited</div>
+  </div>
+  <div class="main">
+    <div class="tbar">
+      <div><div class="tbar-t" id="page-title">Dashboard</div><div class="tbar-s" id="page-sub"></div></div>
+      <div id="tbar-action"></div>
+    </div>
+    <div class="ct" id="content"></div>
+  </div>
+</div>
+<div id="toast-area"></div>
+<div id="modal-area"></div>
+
+<script>
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const todayStr=()=>new Date().toISOString().split('T')[0];
+const fmtDate=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`};
+const fmtAmt=(n,c='GBP')=>(c==='GBP'?'£':'$')+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const e=id=>document.getElementById(id);
+
+const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
+
+function freshForm(init){
+  if(init)return{...init,_isEdit:true,participants:(init.participants||[]).map(p=>({...p,id:uid()})),errors:{}};
+  return{_isEdit:false,id:null,paymentType:'paid',artistName:'',expenseDescription:'',datePaid:todayStr(),amount:'',currency:'GBP',recoupablePercent:100,participants:[{id:uid(),name:'',share:''}],methodPaid:'',invoiceFile:null,note:'',errors:{},saveAnother:false};
+}
+
+function getParticipantNames(){const n=new Set();S.expenses.forEach(ex=>ex.participants?.forEach(p=>{if(p.name?.trim())n.add(p.name.trim())}));return[...n].sort();}
+function getArtistNames(){return[...new Set(S.expenses.map(ex=>ex.artistName).filter(Boolean))];}
+
+const VIEWS=[
+  {id:'dashboard',label:'Dashboard',ic:'⬛'},
+  {id:'add',label:'Add Payment',ic:'➕'},
+  {id:'log',label:'Payments Log',ic:'📋'},
+  {id:'pending',label:'Needs Paying',ic:'💳',isPending:true},
+  {id:'runs',label:'Payment Runs',ic:'📄'},
+];
+const PAGE={
+  dashboard:['Dashboard','Overview of your payments'],
+  add:['Add Payment','Log a payment or submit request'],
+  log:['Payments Log','All recorded payments'],
+  pending:['Needs Paying','Pending payment requests'],
+  runs:['Payment Runs','Generate payment request documents'],
+};
+
+function renderNav(){
+  const pendingCount=S.expenses.filter(ex=>ex.status==='pending').length;
+  e('nav').innerHTML=VIEWS.map(v=>{
+    const badge=v.isPending&&pendingCount>0?`<span class="nb nb-red">${pendingCount}</span>`:'';
+    return`<div class="ni${S.view===v.id?' on':''}" data-nav="${v.id}"><span style="font-size:12px">${v.ic}</span>${v.label}${badge}</div>`;
+  }).join('');
+}
+
+function setView(v,init){
+  S.view=v;
+  if(v==='add')S.form=freshForm(init||null);
+  if(v==='runs'){S.creating=false;S.runForm={name:'',selectedIds:[]};}
+  renderAll();
+}
+
+function renderAll(){
+  renderNav();
+  const[title,sub]=PAGE[S.view]||['',''];
+  e('page-title').textContent=S.view==='add'?(S.form?._isEdit?'Edit Payment':'Add Payment'):title;
+  e('page-sub').textContent=S.view==='log'?`${S.expenses.filter(ex=>ex.status==='paid').length} paid entries`:sub;
+  let act='';
+  if(S.view==='dashboard')act=`<button class="btn bp btn-sm" onclick="setView('add')">＋ Add Payment</button>`;
+  if(S.view==='log')act=`<button class="btn bp btn-sm" onclick="setView('add')">＋ Add Payment</button>`;
+  if(S.view==='pending')act=`<button class="btn bp btn-sm" onclick="setView('add')">＋ Request Payment</button>`;
+  e('tbar-action').innerHTML=act;
+  const views={dashboard:renderDash,add:renderAddForm,log:renderLog,pending:renderPending,runs:renderRuns};
+  (views[S.view]||renderDash)();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+function renderDash(){
+  const paid=S.expenses.filter(ex=>ex.status==='paid');
+  const pendingItems=S.expenses.filter(ex=>ex.status==='pending');
+  const gbp=paid.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const usd=paid.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const recent=[...S.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5);
+  let html=`<div class="stats">
+    <div class="stat"><div class="s-lbl">Accumulated £ Recoupable</div><div class="s-val pk">${fmtAmt(gbp,'GBP')}</div></div>
+    <div class="stat"><div class="s-lbl">Accumulated $ Recoupable</div><div class="s-val tl">${fmtAmt(usd,'USD')}</div></div>
+    <div class="stat"><div class="s-lbl">Pending Requests</div><div class="s-val bk">${pendingItems.length}</div></div>
+    <div class="stat"><div class="s-lbl">Payment Runs</div><div class="s-val bk">${S.runs.length}</div></div>
+  </div>`;
+  html+=`<div class="dbar"><span>💾 In-memory data — export JSON to preserve between sessions</span><div style="display:flex;gap:7px"><button class="btn bs btn-sm" onclick="exportData()">Export JSON</button><label class="btn bs btn-sm" style="cursor:pointer">Import JSON<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label></div></div>`;
+  if(pendingItems.length>0)html+=`<div class="mt-3 card" style="background:#fef2f2;border-color:#fecaca;margin-bottom:14px"><div class="flex aic gap2"><div><div style="font-weight:700;color:#dc2626">⚠ ${pendingItems.length} payment${pendingItems.length!==1?'s':''} awaiting payment</div><div style="font-size:11.5px;color:#888;margin-top:2px">Review and mark as paid when processed</div></div><button class="btn bd btn-sm ml-a" onclick="setView('pending')">Review →</button></div></div>`;
+  html+=`<div class="sh"><div class="st">Recent</div><button class="btn bg btn-sm" onclick="setView('log')">View all →</button></div>`;
+  if(recent.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet</div><div class="es">Add your first payment to get started</div></div></div>`;
+  else{
+    html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Recoupable</th><th>Status</th></tr></thead><tbody>`;
+    recent.forEach(ex=>{
+      const run=ex.runId?S.runs.find(r=>r.id===ex.runId):null;
+      html+=`<tr style="cursor:pointer" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">
+        <td style="color:#888;font-size:11.5px;white-space:nowrap">${fmtDate(ex.datePaid||ex.date)}</td>
+        <td style="font-weight:600">${esc(ex.artistName)}</td>
+        <td style="color:#888">${esc(ex.expenseDescription)}</td>
+        <td style="font-weight:700;color:#087b7a">${fmtAmt(ex.recoupableAmount,ex.currency)}</td>
+        <td><span class="badge ${ex.status==='pending'?'brd':run?'bgr':'bgy'}">${ex.status==='pending'?'Needs Paying':run?'In Run':'Paid'}</span></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div></div>`;
+  }
+  e('content').innerHTML=html;
+}
+
+// ── ADD PAYMENT FORM ──────────────────────────────────────
+function renderAddForm(){
+  if(!S.form)S.form=freshForm();
+  const f=S.form;
+  const pNames=getParticipantNames();
+  const artists=getArtistNames();
+  const pTotal=f.participants.reduce((s,p)=>s+(parseFloat(p.share)||0),0);
+  const pClass=Math.abs(pTotal-100)<0.001?'ok':pTotal>100?'over':'warn';
+  const pMsg=Math.abs(pTotal-100)<0.001?'✓ 100% allocated':pTotal>100?`⚠ Over by ${(pTotal-100).toFixed(4)}%`:`${(100-pTotal).toFixed(4)}% remaining`;
+  const isPaid=f.paymentType==='paid';
+
+  let html=`<div style="max-width:660px"><div class="card">
+  <div class="ptt">
+    <div class="pto${isPaid?' on':''}" onclick="setFF('paymentType','paid')"><div class="pto-lbl">✓ Already Paid</div><div class="pto-sub">Log a completed payment</div></div>
+    <div class="pto${!isPaid?' on':''}" onclick="setFF('paymentType','pending')"><div class="pto-lbl">💳 Needs Paying</div><div class="pto-sub">Submit for payment approval</div></div>
+  </div>
+  <div class="r2">
+    <div class="fg">
+      <label class="fl">Artist Name *</label>
+      <input class="fi" id="f-artist" data-field="artistName" value="${esc(f.artistName)}" placeholder="e.g. MOXO" list="artist-dl">
+      <datalist id="artist-dl">${artists.map(a=>`<option value="${esc(a)}">`).join('')}</datalist>
+      ${f.errors.artistName?`<span class="fe">${f.errors.artistName}</span>`:''}
+    </div>
+    <div class="fg">
+      <label class="fl">Description *</label>
+      <input class="fi" id="f-desc" data-field="expenseDescription" value="${esc(f.expenseDescription)}" placeholder="e.g. EP Artwork, Mix">
+      ${f.errors.expenseDescription?`<span class="fe">${f.errors.expenseDescription}</span>`:''}
+    </div>
+  </div>
+  <div class="${isPaid?'r3':'r2'}">
+    ${isPaid?`<div class="fg">
+      <label class="fl">Date Paid *</label>
+      <input type="date" class="fi" id="f-date" data-field="datePaid" value="${f.datePaid}" style="color-scheme:light">
+    </div>`:''}
+    <div class="fg">
+      <label class="fl">Amount *</label>
+      <input type="number" class="fi" id="f-amount" data-field="amount" value="${f.amount}" placeholder="0.00" step="0.01" min="0">
+      ${f.errors.amount?`<span class="fe">${f.errors.amount}</span>`:''}
+    </div>
+    <div class="fg">
+      <label class="fl">Currency</label>
+      <div class="seg">${['GBP','USD'].map(c=>`<div class="so${f.currency===c?' on':''}" onclick="setFF('currency','${c}')">${c}</div>`).join('')}</div>
+    </div>
+  </div>
+  <div class="${isPaid?'r2':''}">
+    <div class="fg">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <label class="fl" style="margin-bottom:0">Recoupable %</label>
+        <button onclick="toggleRecoupInfo()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:13px;line-height:1;padding:0;display:flex;align-items:center" title="What does this mean?">ⓘ</button>
+      </div>
+      <div id="recoup-info" style="display:none;background:#f0fbfb;border:1px solid #b3d9d8;border-radius:6px;padding:10px 12px;font-size:12px;color:#2a6e6d;margin-bottom:8px;line-height:1.55">
+        <strong style="display:block;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#087b7a">Recoupable Deal Types</strong>
+        <div style="margin-bottom:6px"><strong>100% deal</strong> — the full expense amount is recoupable from the artist's royalties. Use this for costs billed entirely to one project: recording sessions, mix/master fees, production advances, exclusive artwork.</div>
+        <div><strong>50% deal</strong> — only half the expense is recoupable. Use this for co-productions or costs shared across multiple parties — e.g. a session where co-producer fees are split, or artwork used across two releases.</div>
+      </div>
+      <div class="seg">${[50,100].map(p=>`<div class="so${f.recoupablePercent===p?' on':''}" onclick="setFF('recoupablePercent',${p})">${p}% deal</div>`).join('')}</div>
+    </div>
+    ${isPaid?`<div class="fg">
+      <label class="fl">Method Paid</label>
+      <select class="fi" id="f-method" data-field="methodPaid">
+        <option value="">Select method...</option>
+        ${['PAYPAL','REVOLUT','WISE','HSBC'].map(m=>`<option value="${m}"${f.methodPaid===m?' selected':''}>${m}</option>`).join('')}
+      </select>
+    </div>`:''}
+  </div>
+  ${!isPaid?`<div class="fg">
+    <label class="fl">Invoice *</label>
+    <div style="font-size:11.5px;color:#7a6500;background:#fffdf0;border:1px solid #f0e68c;border-radius:5px;padding:6px 10px;margin-bottom:7px">💡 Make sure bank details are on the invoice before uploading</div>
+    <label class="inv-area">
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="handleInvoiceUpload(event)">
+      ${f.invoiceFile
+        ?`<div class="inv-name">📎 ${esc(f.invoiceFile.name)} <span style="margin-left:auto;cursor:pointer;opacity:.6" onclick="event.preventDefault();clearInvoice()">✕</span></div>`
+        :`<div style="font-size:12px;color:#888"><strong style="color:#555">Click to attach invoice</strong><br>PDF, image or document</div>`}
+    </label>
+    ${f.errors.invoiceFile?`<span class="fe">${f.errors.invoiceFile}</span>`:''}
+  </div>`:''}
+  <div class="divider"></div>
+  <div class="flex aic mb-3" style="justify-content:space-between">
+    <div style="font-size:13px;font-weight:900">Participant Splits</div>
+    <button class="btn bs btn-sm" onclick="addParticipant()">＋ Add Participant</button>
+  </div>
+  <datalist id="pname-dl">${pNames.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+  <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-left:3px solid #087b7a;border-radius:5px;padding:7px 11px;font-size:11.5px;color:#555;margin-bottom:10px">✎ Use each participant's <strong>full legal name</strong> — double-check spelling before saving</div>
+  ${f.errors.participants?`<div style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:7px 11px;font-size:12px;margin-bottom:8px">${f.errors.participants}</div>`:''}
+  <div id="parts-list">
+    ${f.participants.map((p,i)=>`<div class="pr">
+      <span class="pn">${i+1}.</span>
+      <input class="fi pi" data-field="pname-${i}" value="${esc(p.name)}" placeholder="Full legal name" list="pname-dl">
+      <input type="number" class="fi ps" data-field="pshare-${i}" value="${p.share}" placeholder="0.00" step="0.0001" min="0" max="100">
+      <span class="pp">%</span>
+      <button class="prm" onclick="removeParticipant(${i})" title="Remove">✕</button>
+    </div>`).join('')}
+  </div>
+  ${f.participants.length>0?`<div class="pt ${pClass}" id="part-total"><span>${pMsg}</span><strong>${pTotal.toFixed(4)}%</strong></div>`:''}
+  ${f.errors.partTotal?`<span class="fe">${f.errors.partTotal}</span>`:''}
+  <div class="divider"></div>
+  <div class="fg" style="margin-bottom:12px">
+    <label class="fl">Note (optional)</label>
+    <textarea class="fi" id="f-note" data-field="note" rows="2" placeholder="Any additional details...">${esc(f.note)}</textarea>
+  </div>
+  <div class="flex aic gap2" style="flex-wrap:wrap">
+    ${!f._isEdit?`<label class="flex aic gap2" style="cursor:pointer;font-size:12.5px;color:#666"><input type="checkbox" ${f.saveAnother?'checked':''} onchange="S.form.saveAnother=this.checked" style="accent-color:#087b7a"> Save &amp; add another</label>`:''}
+    <div class="ml-a flex gap2">
+      <button class="btn bg" onclick="setView('${f._isEdit?'log':'dashboard'}')">Cancel</button>
+      <button class="btn bp" onclick="submitForm()">✓ ${f._isEdit?'Save Changes':isPaid?'Save Payment':'Submit Request'}</button>
+    </div>
+  </div>
+  </div></div>`;
+
+  e('content').innerHTML=html;
+  attachFormListeners();
+}
+
+function attachFormListeners(){
+  e('content').addEventListener('input',ev=>{
+    const field=ev.target.dataset.field;
+    if(!field||!S.form)return;
+    const v=ev.target.value;
+    if(field==='artistName')S.form.artistName=v;
+    else if(field==='expenseDescription')S.form.expenseDescription=v;
+    else if(field==='datePaid')S.form.datePaid=v;
+    else if(field==='amount')S.form.amount=v;
+    else if(field==='methodPaid')S.form.methodPaid=v;
+    else if(field==='note')S.form.note=v;
+    else if(field.startsWith('pname-')){const i=parseInt(field.split('-')[1]);if(S.form.participants[i])S.form.participants[i].name=v;}
+    else if(field.startsWith('pshare-')){const i=parseInt(field.split('-')[1]);if(S.form.participants[i]){S.form.participants[i].share=v;updatePartTotal();}}
+  });
+}
+
+function updatePartTotal(){
+  const f=S.form;if(!f)return;
+  const total=f.participants.reduce((s,p)=>s+(parseFloat(p.share)||0),0);
+  const el=e('part-total');if(!el)return;
+  const cls=Math.abs(total-100)<0.001?'ok':total>100?'over':'warn';
+  const msg=Math.abs(total-100)<0.001?'✓ 100% allocated':total>100?`⚠ Over by ${(total-100).toFixed(4)}%`:`${(100-total).toFixed(4)}% remaining`;
+  el.className=`pt ${cls}`;el.innerHTML=`<span>${msg}</span><strong>${total.toFixed(4)}%</strong>`;
+}
+
+function setFF(field,val){if(!S.form)return;syncFormInputs();S.form[field]=val;renderAddForm();}
+function addParticipant(){if(!S.form)return;syncFormInputs();S.form.participants.push({id:uid(),name:'',share:''});renderAddForm();setTimeout(()=>{const inputs=document.querySelectorAll('[data-field^="pname-"]');if(inputs.length)inputs[inputs.length-1].focus();},50);}
+function removeParticipant(idx){if(!S.form)return;syncFormInputs();S.form.participants.splice(idx,1);renderAddForm();}
+function clearInvoice(){if(S.form){S.form.invoiceFile=null;renderAddForm();}}
+
+function handleInvoiceUpload(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=evt=>{if(S.form){S.form.invoiceFile={name:file.name,data:evt.target.result,type:file.type};renderAddForm();}};
+  reader.readAsDataURL(file);
+}
+
+function syncFormInputs(){
+  if(!S.form)return;
+  S.form.participants.forEach((p,i)=>{
+    const n=document.querySelector(`[data-field="pname-${i}"]`);
+    const s=document.querySelector(`[data-field="pshare-${i}"]`);
+    if(n)p.name=n.value;if(s)p.share=s.value;
+  });
+  ['f-artist','f-desc','f-date','f-amount','f-method','f-note'].forEach(id=>{
+    const el=e(id);if(!el)return;
+    const m={['f-artist']:'artistName',['f-desc']:'expenseDescription',['f-date']:'datePaid',['f-amount']:'amount',['f-method']:'methodPaid',['f-note']:'note'};
+    if(m[id])S.form[m[id]]=el.value;
+  });
+}
+
+function submitForm(){
+  if(!S.form)return;
+  syncFormInputs();
+  const f=S.form;const errs={};
+  if(!f.artistName.trim())errs.artistName='Required';
+  if(!f.expenseDescription.trim())errs.expenseDescription='Required';
+  if(!f.amount||isNaN(f.amount)||parseFloat(f.amount)<=0)errs.amount='Enter a valid amount';
+  if(f.participants.length===0)errs.participants='Add at least one participant';
+  if(f.participants.some(p=>!p.name.trim()))errs.participants='All participants need a name';
+  const total=f.participants.reduce((s,p)=>s+(parseFloat(p.share)||0),0);
+  if(Math.abs(total-100)>0.001)errs.partTotal=`Shares must total 100% (currently ${total.toFixed(4)}%)`;
+  if(f.paymentType==='pending'&&!f.invoiceFile)errs.invoiceFile='Please attach an invoice';
+  if(Object.keys(errs).length>0){S.form.errors=errs;renderAddForm();return;}
+  const recoupableAmount=parseFloat(f.amount)*f.recoupablePercent/100;
+  const exp={
+    id:f._isEdit?f.id:uid(),
+    createdAt:f._isEdit?(f.createdAt||new Date().toISOString()):new Date().toISOString(),
+    status:f.paymentType==='paid'?'paid':'pending',
+    artistName:f.artistName.trim(),expenseDescription:f.expenseDescription.trim(),
+    datePaid:f.paymentType==='paid'?f.datePaid:null,
+    amount:parseFloat(f.amount),currency:f.currency,
+    recoupablePercent:f.recoupablePercent,recoupableAmount,
+    participants:f.participants.map(p=>({name:p.name.trim(),share:parseFloat(p.share)})),
+    methodPaid:f.paymentType==='paid'?f.methodPaid:'',
+    invoiceFile:f.paymentType==='pending'?f.invoiceFile:null,
+    note:f.note.trim(),
+    runId:f._isEdit?f.runId:null,
+  };
+  if(f._isEdit){S.expenses=S.expenses.map(ex=>ex.id===exp.id?exp:ex);showToast('Payment updated');setView('log');}
+  else{S.expenses.push(exp);showToast(f.paymentType==='paid'?'Payment logged':'Payment request submitted');if(f.saveAnother){S.form=freshForm();renderAddForm();}else{setView(f.paymentType==='pending'?'pending':'dashboard');}}
+}
+
+// ── PAYMENTS LOG ──────────────────────────────────────────
+function renderLog(){
+  const{search,currency}=S.filters;
+  let exps=S.expenses.filter(ex=>ex.status==='paid').filter(ex=>{
+    if(currency!=='all'&&ex.currency!==currency)return false;
+    if(search){const q=search.toLowerCase();return ex.artistName?.toLowerCase().includes(q)||ex.expenseDescription?.toLowerCase().includes(q)||ex.participants?.some(p=>p.name?.toLowerCase().includes(q));}
+    return true;
+  }).sort((a,b)=>new Date(b.datePaid||b.createdAt)-new Date(a.datePaid||a.createdAt));
+
+  let html=`<div class="card" style="padding:10px 14px;margin-bottom:12px">
+    <div class="flex gap2" style="flex-wrap:wrap;align-items:center">
+      <input class="fi" style="flex:1;min-width:140px" placeholder="Search artist, participant..." value="${esc(search)}" oninput="S.filters.search=this.value;renderLog()">
+      <div class="seg" style="width:170px">${['all','GBP','USD'].map(c=>`<div class="so${currency===c?' on':''}" onclick="S.filters.currency='${c}';renderLog()">${c==='all'?'All':c}</div>`).join('')}</div>
+      <div class="flex aic gap2">${S.lastSynced?`<span style="font-size:10.5px;color:#16a34a">✓ Synced ${S.lastSynced}</span>`:''}<button class="btn ${S.sheetsUrl?'bt':'bs'} btn-sm" onclick="${S.sheetsUrl?'syncToSheets()':'openSheetsSetup()'}">🔗 ${S.sheetsUrl?'Sync to Sheets':'Connect Sheets'}</button></div>
+    </div>
+  </div>`;
+
+  if(S.expenses.filter(ex=>ex.status==='paid').length===0){
+    html+=`<div class="empty"><div class="ei">📋</div><div class="et">No paid payments yet</div><div class="es">Logged payments appear here</div></div>`;
+    e('content').innerHTML=html;return;
+  }
+
+  html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
+    <thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Amount</th><th>Recoup%</th><th>Recoupable</th><th>Method</th><th>Participants</th><th>Run</th><th></th></tr></thead>
+    <tbody>`;
+  if(exps.length===0)html+=`<tr><td colspan="10" style="text-align:center;padding:30px;color:#bbb">No results match filters</td></tr>`;
+  exps.forEach(ex=>{
+    const run=ex.runId?S.runs.find(r=>r.id===ex.runId):null;
+    const isExp=S.expandedId===ex.id;
+    html+=`<tr>
+      <td style="color:#888;font-size:11px;white-space:nowrap">${fmtDate(ex.datePaid)}</td>
+      <td style="font-weight:600;white-space:nowrap">${esc(ex.artistName)}</td>
+      <td style="color:#555;max-width:120px;word-break:break-word">${esc(ex.expenseDescription)}</td>
+      <td style="font-weight:600;white-space:nowrap">${fmtAmt(ex.amount,ex.currency)}</td>
+      <td><span class="badge ${ex.recoupablePercent===100?'bpk':'bam'}">${ex.recoupablePercent}%</span></td>
+      <td style="font-weight:700;color:#087b7a;white-space:nowrap">${fmtAmt(ex.recoupableAmount,ex.currency)}</td>
+      <td style="font-size:11px;color:#666">${ex.methodPaid||'—'}</td>
+      <td><button class="btn bg btn-xs" onclick="S.expandedId=S.expandedId==='${ex.id}'?null:'${ex.id}';renderLog()">${(ex.participants||[]).length}p ${isExp?'▲':'▼'}</button></td>
+      <td>${run?`<span class="badge bgr" style="font-size:10px;cursor:pointer" onclick="viewReport('${run.id}')">${esc(run.name.substring(0,18))}…</span>`:`<span class="badge bgy">Unsubmitted</span>`}</td>
+      <td><div class="flex gap2">${!ex.runId?`<button class="btn bg btn-xs" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">Edit</button><button class="btn bd btn-xs" onclick="delPayment('${ex.id}')">🗑</button>`:''}</div></td>
+    </tr>`;
+    if(isExp){
+      html+=`<tr style="background:#fafafa"><td colspan="10" style="padding:8px 10px 12px">`;
+      if(ex.note)html+=`<div class="note-box" style="margin-bottom:8px">📝 ${esc(ex.note)}</div>`;
+      html+=`<div style="font-size:10.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Participant Splits</div><div style="display:flex;gap:24px;flex-wrap:wrap">`;
+      (ex.participants||[]).forEach(p=>{html+=`<div style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888;font-family:monospace">${p.share}%</span></div>`;});
+      html+=`</div></td></tr>`;
+    }
+  });
+  html+=`</tbody></table></div></div><div class="mt-2 text-sm text-muted">Showing ${exps.length} of ${S.expenses.filter(ex=>ex.status==='paid').length} paid payments</div>`;
+  e('content').innerHTML=html;
+}
+
+// ── NEEDS PAYING ──────────────────────────────────────────
+function renderPending(){
+  const items=S.expenses.filter(ex=>ex.status==='pending');
+  if(items.length===0){
+    e('content').innerHTML=`<div class="empty"><div class="ei">✅</div><div class="et">All clear</div><div class="es">No pending payment requests</div></div>`;
+    return;
+  }
+  let html=`<div style="margin-bottom:12px;font-size:12px;color:#888">${items.length} payment${items.length!==1?'s':''} awaiting processing</div>`;
+  items.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).forEach(ex=>{
+    const total=fmtAmt(ex.recoupableAmount,ex.currency);
+    html+=`<div class="pend-card">
+      <div class="pend-h">
+        <div style="flex:1">
+          <div style="font-weight:700">${esc(ex.artistName)} — ${esc(ex.expenseDescription)}</div>
+          <div class="pend-meta">Requested ${fmtDate(ex.createdAt?.split('T')[0])} · ${(ex.participants||[]).length} participant${(ex.participants||[]).length!==1?'s':''} · ${ex.recoupablePercent}% recoupable</div>
+          ${ex.note?`<div class="note-box" style="margin-top:6px">📝 ${esc(ex.note)}</div>`:''}
+          <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap">
+            ${(ex.participants||[]).map(p=>`<span style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888">${p.share}%</span></span>`).join('')}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:18px;font-weight:900;color:#087b7a">${total}</div>
+          <div style="font-size:10.5px;color:#888;margin-bottom:8px">recoupable</div>
+          <div class="flex gap2" style="justify-content:flex-end">
+            <button class="btn bs btn-sm" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">Edit</button>
+            <button class="btn bp btn-sm" onclick="openMarkPaid('${ex.id}')">Mark Paid</button>
+          </div>
+        </div>
+      </div>
+      <div class="pend-inv">
+        ${ex.invoiceFile?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:7px"><span style="font-size:11px;color:#888">Invoice:</span><a href="${ex.invoiceFile.data}" download="${esc(ex.invoiceFile.name)}" style="font-size:12px;color:#087b7a;font-weight:600">📎 ${esc(ex.invoiceFile.name)}</a></div>`:''}
+        <div style="font-size:11.5px;color:#7a6500;background:#fffdf0;border:1px solid #f0e68c;border-radius:5px;padding:6px 10px">💡 Check that bank details are included on the invoice before marking as paid</div>
+      </div>
+    </div>`;
+  });
+  e('content').innerHTML=html;
+}
+
+function openMarkPaid(id){
+  const ex=S.expenses.find(x=>x.id===id);if(!ex)return;
+  e('modal-area').innerHTML=`<div class="modal-bg" id="mark-paid-modal">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-head"><div style="font-weight:700">Mark as Paid</div><button class="btn bg btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="padding:20px">
+        <div style="font-weight:600;margin-bottom:14px">${esc(ex.artistName)} — ${esc(ex.expenseDescription)}</div>
+        <div style="font-size:18px;font-weight:900;color:#087b7a;margin-bottom:16px">${fmtAmt(ex.recoupableAmount,ex.currency)}</div>
+        <div class="fg"><label class="fl">Date Paid *</label><input type="date" class="fi" id="mp-date" value="${todayStr()}" style="color-scheme:light"></div>
+        <div class="fg"><label class="fl">Method Paid</label>
+          <select class="fi" id="mp-method">
+            <option value="">Select method...</option>
+            ${['PAYPAL','REVOLUT','WISE','HSBC'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+          </select>
+        </div>
+        <div class="flex gap2 mt-3" style="justify-content:flex-end">
+          <button class="btn bg" onclick="closeModal()">Cancel</button>
+          <button class="btn bp" onclick="confirmMarkPaid('${id}')">✓ Confirm Paid</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function confirmMarkPaid(id){
+  const dp=e('mp-date')?.value;const mp=e('mp-method')?.value;
+  if(!dp){showToast('Please enter a date');return;}
+  S.expenses=S.expenses.map(ex=>ex.id===id?{...ex,status:'paid',datePaid:dp,methodPaid:mp}:ex);
+  closeModal();showToast('Payment marked as paid');renderNav();
+  if(S.view==='pending')renderPending();
+}
+
+function delPayment(id){
+  if(!confirm('Delete this payment?'))return;
+  S.expenses=S.expenses.filter(ex=>ex.id!==id);
+  showToast('Deleted');renderLog();
+}
+
+// ── PAYMENT RUNS ──────────────────────────────────────────
+function renderRuns(){
+  const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId);
+  if(S.creating){
+    const{name,selectedIds}=S.runForm;
+    const sel=paidUnsubmitted.filter(ex=>selectedIds.includes(ex.id));
+    const sGBP=sel.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
+    const sUSD=sel.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
+    let html=`<div style="max-width:660px"><div class="card">
+      <div class="fg"><label class="fl">Run Name *</label>
+        <input class="fi" value="${esc(name)}" placeholder="e.g. Payment Request — Nov 2025" oninput="S.runForm.name=this.value" id="run-name-input">
+      </div>
+      <div class="flex aic" style="justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700">Select Paid Expenses</div>
+        <button class="btn bg btn-sm" onclick="S.runForm.selectedIds=S.runForm.selectedIds.length===${paidUnsubmitted.length}?[]:${JSON.stringify(paidUnsubmitted.map(ex=>ex.id))};renderRuns()">${selectedIds.length===paidUnsubmitted.length?'Deselect all':'Select all'}</button>
+      </div>`;
+    if(paidUnsubmitted.length===0)html+=`<div style="padding:16px;text-align:center;color:#bbb;font-size:12.5px">No unsubmitted paid expenses available</div>`;
+    else{
+      html+=`<div style="border:1px solid #e5e5e5;border-radius:7px;overflow:hidden">`;
+      paidUnsubmitted.forEach(ex=>{const chk=selectedIds.includes(ex.id);
+        html+=`<div class="cb"><input type="checkbox" ${chk?'checked':''} onchange="toggleRunExp('${ex.id}')">
+          <label class="cbl" onclick="toggleRunExp('${ex.id}')"><div class="cbm">${esc(ex.artistName)} — ${esc(ex.expenseDescription)}</div><div class="cbs">${fmtDate(ex.datePaid)} · ${(ex.participants||[]).length}p · ${ex.recoupablePercent}% recoup · ${ex.methodPaid||'—'}</div></label>
+          <span class="cba">${fmtAmt(ex.recoupableAmount,ex.currency)}</span></div>`;
+      });
+      html+=`</div>`;
+    }
+    if(sel.length>0)html+=`<div class="rtots mt-3">${sGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(sGBP,'GBP')}</div></div>`:''} ${sUSD>0?`<div class="rtot"><div class="rtl">USD Recoupable</div><div class="rtv" style="color:#5e7a00">${fmtAmt(sUSD,'USD')}</div></div>`:''}<div class="rtot"><div class="rtl">Items Selected</div><div class="rtv">${sel.length}</div></div></div>`;
+    html+=`<div class="divider"></div><div class="flex gap2">
+      <button class="btn bg" onclick="S.creating=false;renderRuns()">Cancel</button>
+      <button class="btn bp" ${!name.trim()||sel.length===0?'disabled':''} onclick="createRun()">✓ Create Run</button>
+    </div></div></div>`;
+    e('content').innerHTML=html;return;
+  }
+  let html=`<div class="sh"><div><div class="st">Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid expenses</div>`:''}</div>
+    <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="S.creating=true;renderRuns()">＋ New Run</button></div>`;
+  if(S.runs.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No runs yet</div><div class="es">Log paid expenses first, then create a run</div></div>`;
+  [...S.runs].reverse().forEach(run=>{
+    const runExps=S.expenses.filter(ex=>ex.runId===run.id);
+    html+=`<div class="rc"><div class="rc-h">
+      <div><div style="font-weight:700">${esc(run.name)}</div><div style="font-size:11px;color:#888;margin-top:1px">Created ${fmtDate(run.createdAt?.split('T')[0])} · ${runExps.length} line items</div></div>
+      <div class="flex gap2">
+        <button class="btn bt btn-sm" onclick="viewReport('${run.id}')">👁 Preview</button>
+        <button class="btn bp btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download .docx</button>
+      </div>
+    </div><div class="rc-b"><div class="rtots">
+      ${run.totalGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(run.totalGBP,'GBP')}</div></div>`:''}
+      ${run.totalUSD>0?`<div class="rtot"><div class="rtl">USD Recoupable</div><div class="rtv" style="color:#5e7a00">${fmtAmt(run.totalUSD,'USD')}</div></div>`:''}
+      <div class="rtot"><div class="rtl">Line Items</div><div class="rtv">${runExps.length}</div></div>
+    </div></div></div>`;
+  });
+  e('content').innerHTML=html;
+}
+
+function toggleRunExp(id){
+  const ids=S.runForm.selectedIds;
+  S.runForm.selectedIds=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];
+  renderRuns();setTimeout(()=>{const inp=e('run-name-input');if(inp)inp.value=S.runForm.name;},10);
+}
+
+function createRun(){
+  const{name,selectedIds}=S.runForm;
+  if(!name.trim()||selectedIds.length===0)return;
+  const sel=S.expenses.filter(ex=>selectedIds.includes(ex.id));
+  const totalGBP=sel.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const totalUSD=sel.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const run={id:uid(),createdAt:new Date().toISOString(),name:name.trim(),expenseIds:[...selectedIds],totalGBP,totalUSD};
+  S.runs.push(run);
+  S.expenses=S.expenses.map(ex=>selectedIds.includes(ex.id)?{...ex,runId:run.id}:ex);
+  S.creating=false;S.runForm={name:'',selectedIds:[]};
+  showToast('Run created');
+  viewReport(run.id);
+  renderRuns();
+}
+
+// ── REPORT PREVIEW ────────────────────────────────────────
+function viewReport(runId){
+  const run=S.runs.find(r=>r.id===runId);if(!run)return;
+  const runExps=S.expenses.filter(ex=>ex.runId===runId);
+  const rows=runExps.map(ex=>{
+    return (ex.participants||[]).map((p,i)=>{
+      const isFirst=i===0;
+      return`<tr>
+        <td>${esc(p.name)}</td>
+        <td style="text-align:right">${p.share}%</td>
+        <td></td>
+        <td style="text-align:center">${isFirst?ex.recoupablePercent+'%':''}</td>
+        <td style="text-align:right;font-weight:${isFirst?'700':'400'}">${isFirst?fmtAmt(ex.recoupableAmount,ex.currency):''}</td>
+      </tr>`;
+    }).join('');
+  }).join('');
+  e('modal-area').innerHTML=`<div class="modal-bg" id="report-modal" onclick="if(event.target.id==='report-modal')closeModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <div style="font-weight:700;font-size:14px">${esc(run.name)}</div>
+        <div class="flex gap2">
+          <button class="btn bp btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download .docx</button>
+          <button class="btn bg btn-sm" onclick="closeModal()">✕ Close</button>
+        </div>
+      </div>
+      <div class="modal-body" id="report-body">
+        <table style="width:auto;border-collapse:collapse;margin-bottom:10px">
+          <tr><td style="padding:3px 8px"><strong>Artist</strong></td><td style="padding:3px 8px;padding-left:60px"></td><td style="padding:3px 8px"><strong>Service</strong></td><td></td></tr>
+        </table>
+        <table style="border-collapse:collapse;margin-bottom:14px">
+          <tr><td style="padding:4px 10px;border:1px solid #000;font-weight:bold">CORE DISB ID</td><td style="padding:4px 30px;border:1px solid #000;min-width:160px"></td></tr>
+          <tr><td style="padding:4px 10px;border:1px solid #000;font-weight:bold">ACCT ENTRY DATE</td><td style="border:1px solid #000"></td></tr>
+          <tr><td style="padding:4px 10px;border:1px solid #000;font-weight:bold">PAID DATE</td><td style="border:1px solid #000"></td></tr>
+          <tr><td style="padding:4px 10px;border:1px solid #000;font-weight:bold">CASE#</td><td style="border:1px solid #000"></td></tr>
+        </table>
+        <table style="border-collapse:collapse;margin-bottom:16px">
+          <tr><td style="padding:2px 8px;font-weight:bold;width:210px">Payee:</td><td style="padding:2px 8px"></td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">Pay To:</td><td style="padding:2px 8px">Hive Music Limited</td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">Amount Paid by Position:</td><td style="padding:2px 8px">100%</td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">Payment Description:</td><td style="padding:2px 8px">Production Expenses</td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">A&amp;R:</td><td style="padding:2px 8px">Rick &amp; Robin</td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">Artist:</td><td style="padding:2px 8px">Various</td></tr>
+          <tr><td style="padding:2px 8px;font-weight:bold">Album code:</td><td style="padding:2px 8px">Various</td></tr>
+        </table>
+        <table class="report-tbl">
+          <thead><tr>
+            <th style="width:35%;text-align:left">Recoupable from:</th>
+            <th style="width:18%;text-align:right">Participation Share</th>
+            <th style="width:18%;text-align:left">Participation Amount</th>
+            <th style="width:12%;text-align:center">Recoupable %</th>
+            <th style="width:17%;text-align:right">Recoupable Amount</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="font-weight:bold;margin-top:16px">Payment Method:</p>
+        <p style="font-weight:bold;margin-top:12px">Wire Details:</p>
+        <table class="wire-tbl">
+          <tr><td>Bank Name &amp; Address:</td><td></td></tr>
+          <tr><td>Account Number:</td><td></td></tr>
+          <tr><td>Swift Code/Routing Number:</td><td></td></tr>
+          <tr><td>IBAN (international wires):</td><td></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function closeModal(){e('modal-area').innerHTML='';}
+
+// ── DOCX EXPORT ───────────────────────────────────────────
+function xmlEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function mkBdr(color,sz=6){return`<w:top w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:left w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:bottom w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:right w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/>`;}
+function mkNoBdr(){return`<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>`;}
+
+function mkCell(text,opts={}){
+  const{bold=false,bg='',color='',w=0,align='left',bdr='',sz=20,vPad=80,hPad=120}=opts;
+  let tcPr='';
+  if(bg)tcPr+=`<w:shd w:val="clear" w:color="auto" w:fill="${bg}"/>`;
+  if(bdr)tcPr+=`<w:tcBorders>${bdr}</w:tcBorders>`;
+  if(w)tcPr+=`<w:tcW w:w="${w}" w:type="dxa"/>`;
+  tcPr+=`<w:tcMar><w:top w:w="${vPad}" w:type="dxa"/><w:left w:w="${hPad}" w:type="dxa"/><w:bottom w:w="${vPad}" w:type="dxa"/><w:right w:w="${hPad}" w:type="dxa"/></w:tcMar>`;
+  let rPr=`<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
+  if(bold)rPr+='<w:b/>';
+  if(color)rPr+=`<w:color w:val="${color}"/>`;
+  const pPr=`<w:pPr><w:jc w:val="${align}"/><w:spacing w:after="0"/></w:pPr>`;
+  return`<w:tc>${tcPr?`<w:tcPr>${tcPr}</w:tcPr>`:''}<w:p>${pPr}<w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r></w:p></w:tc>`;
+}
+
+function mkTbl(rows,colWidths,opts={}){
+  const total=colWidths.reduce((s,w)=>s+w,0);
+  const grid=colWidths.map(w=>`<w:gridCol w:w="${w}"/>`).join('');
+  const insideBdr=opts.insideBdr||'<w:insideH w:val="none"/><w:insideV w:val="none"/>';
+  return`<w:tbl><w:tblPr><w:tblW w:w="${total}" w:type="dxa"/><w:tblBorders>${insideBdr}</w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
+}
+
+function mkRow(cells){return`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`;}
+
+function mkPara(text,opts={}){
+  const{bold=false,sz=20,before=0,after=120}=opts;
+  let rPr=`<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
+  if(bold)rPr+='<w:b/>';
+  return`<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/></w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r></w:p>`;
+}
+
+function buildDocXml(run,runExps){
+  // Content width: 9360 DXA (US Letter 8.5" - 2" margins)
+  const noBdr=mkNoBdr();
+  const blkBdr=mkBdr('000000',6);
+  const gryBdr=mkBdr('CCCCCC',4);
+
+  // 1. Artist/Service invisible table
+  const artistTbl=mkTbl(
+    mkRow(mkCell('Artist',{bold:true,w:2400,bdr:noBdr})+mkCell('',{w:800,bdr:noBdr})+mkCell('Service',{bold:true,w:2400,bdr:noBdr})+mkCell('',{w:3760,bdr:noBdr})),
+    [2400,800,2400,3760]
+  );
+
+  // 2. CORE DISB ID box
+  const coreRows=[['CORE DISB ID',''],['ACCT ENTRY DATE',''],['PAID DATE',''],['CASE#','']].map(([k,v])=>
+    mkRow(mkCell(k,{bold:true,w:2520,bdr:blkBdr})+mkCell(v,{w:4000,bdr:blkBdr}))
+  ).join('');
+  const coreTbl=mkTbl(coreRows,[2520,4000]);
+
+  // 3. Meta table
+  const metaRows=[
+    ['Payee:',''],['Pay To:','Hive Music Limited'],['Amount Paid by Position:','100%'],
+    ['Payment Description:','Production Expenses'],["A\u0026R:",'Rick & Robin'],
+    ['Artist:','Various'],['Album code:','Various']
+  ].map(([k,v])=>mkRow(mkCell(k,{bold:true,w:2800,bdr:noBdr})+mkCell(v,{w:6560,bdr:noBdr}))).join('');
+  const metaTbl=mkTbl(metaRows,[2800,6560]);
+
+  // 4. Main expense table
+  const colW=[3276,1685,1685,1123,1591];
+  const hdrs=['Recoupable from:','Participation Share','Participation Amount','Recoupable %','Recoupable Amount'];
+  const aligns=['left','right','left','center','right'];
+  const hdrRow=mkRow(hdrs.map((h,i)=>mkCell(h,{bold:true,bg:'000000',color:'FFFFFF',w:colW[i],bdr:gryBdr,align:aligns[i]})).join(''));
+  const dataRows=runExps.flatMap(ex=>(ex.participants||[]).map((p,i)=>{
+    const isFirst=i===0;
+    return mkRow(
+      mkCell(p.name,{w:colW[0],bdr:gryBdr})+
+      mkCell(p.share+'%',{w:colW[1],bdr:gryBdr,align:'right'})+
+      mkCell('',{w:colW[2],bdr:gryBdr})+
+      mkCell(isFirst?ex.recoupablePercent+'%':'',{w:colW[3],bdr:gryBdr,align:'center'})+
+      mkCell(isFirst?fmtAmt(ex.recoupableAmount,ex.currency):'',{w:colW[4],bdr:gryBdr,align:'right',bold:isFirst})
+    );
+  })).join('');
+  const mainTbl=mkTbl(hdrRow+dataRows,colW,{insideBdr:`<w:insideH w:val="single" w:sz="4" w:color="CCCCCC"/><w:insideV w:val="single" w:sz="4" w:color="CCCCCC"/>`});
+
+  // 5. Wire details
+  const wireRows=[
+    ['Bank Name & Address:',''],['Account Number:',''],
+    ['Swift Code/Routing Number:',''],['IBAN (international wires):','']
+  ].map(([k,v])=>mkRow(mkCell(k,{bold:true,w:2800,bdr:`<w:bottom w:val="single" w:sz="4" w:color="DDDDDD"/><w:top w:val="none"/><w:left w:val="none"/><w:right w:val="none"/>`})+mkCell(v,{w:6560,bdr:`<w:bottom w:val="single" w:sz="4" w:color="DDDDDD"/><w:top w:val="none"/><w:left w:val="none"/><w:right w:val="none"/>`}))).join('');
+  const wireTbl=mkTbl(wireRows,[2800,6560]);
+
+  const body=[
+    artistTbl,mkPara('',{after:100}),
+    coreTbl,mkPara('',{after:100}),
+    metaTbl,mkPara('',{after:100}),
+    mainTbl,mkPara('',{after:100}),
+    mkPara('Payment Method:',{bold:true,after:80}),
+    mkPara('',{after:100}),
+    mkPara('Wire Details:',{bold:true,after:80}),
+    wireTbl
+  ].join('');
+
+  return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:body>${body}
+<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>
+</w:body></w:document>`;
+}
+
+async function downloadDocx(runId){
+  const run=S.runs.find(r=>r.id===runId);if(!run)return;
+  if(typeof JSZip==='undefined'){showToast('JSZip not loaded');return;}
+  const runExps=S.expenses.filter(ex=>ex.runId===runId);
+  const docXml=buildDocXml(run,runExps);
+  const zip=new JSZip();
+  zip.file('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`);
+  zip.folder('_rels').file('.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  const word=zip.folder('word');
+  word.folder('_rels').file('document.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+  word.file('document.xml',docXml);
+  word.file('styles.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`);
+  try{
+    const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`${run.name}.docx`;a.click();
+    URL.revokeObjectURL(url);showToast('Document downloaded');
+  }catch(err){showToast('Error generating document: '+err.message);}
+}
+
+// ── DATA / TOAST / MISC ───────────────────────────────────
+function exportData(){
+  const data=JSON.stringify({expenses:S.expenses,runs:S.runs,sheetsUrl:S.sheetsUrl},null,2);
+  const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='hive-expenses-backup.json';a.click();
+  URL.revokeObjectURL(url);showToast('Data exported');
+}
+
+function importData(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{const d=JSON.parse(e.target.result);
+      if(d.expenses)S.expenses=d.expenses;
+      if(d.runs)S.runs=d.runs;
+      if(d.sheetsUrl)S.sheetsUrl=d.sheetsUrl;
+      showToast(`Imported ${S.expenses.length} expenses, ${S.runs.length} runs`);
+      renderAll();
+    }catch{showToast('Error reading file');}
+  };
+  reader.readAsText(file);
+}
+
+let toastTimer;
+function showToast(msg){
+  clearTimeout(toastTimer);
+  e('toast-area').innerHTML=`<div class="toast">✓ ${msg}</div>`;
+  toastTimer=setTimeout(()=>e('toast-area').innerHTML='',2800);
+}
+
+function toggleRecoupInfo(){const el=document.getElementById('recoup-info');if(el)el.style.display=el.style.display==='none'?'block':'none';}
+
+function openSheetsSetup(){
+  e('modal-area').innerHTML=`<div class="modal-bg" id="sheets-modal" onclick="if(event.target.id==='sheets-modal')closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-head"><div style="font-weight:700">Connect Google Sheets</div><button class="btn bg btn-sm" onclick="closeModal()">&#x2715;</button></div>
+      <div style="padding:20px">
+        <div class="fg"><label class="fl">Apps Script Web App URL</label>
+          <input class="fi" id="sheets-url-input" value="${esc(S.sheetsUrl)}" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <div style="background:#f8f8f8;border-radius:7px;padding:12px;font-size:12px;color:#555;margin-bottom:16px;line-height:1.6">
+          <div style="font-weight:700;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Setup steps</div>
+          <div>1. Open your Google Sheet → Extensions → Apps Script</div>
+          <div>2. Paste the sync script → Save → Deploy as Web App</div>
+          <div>3. Copy the /exec URL and paste above</div>
+        </div>
+        <div class="flex gap2" style="justify-content:flex-end">
+          <button class="btn bg" onclick="closeModal()">Cancel</button>
+          <button class="btn bp" onclick="saveSheetsUrl()">Save &amp; Sync Now</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(()=>{const inp=e('sheets-url-input');if(inp)inp.focus();},50);
+}
+function saveSheetsUrl(){
+  const url=(e('sheets-url-input')?.value||'').trim();
+  if(!url){showToast('Please enter a URL');return;}
+  if(!url.includes('script.google.com')){showToast("That doesn't look like an Apps Script URL");return;}
+  S.sheetsUrl=url;closeModal();syncToSheets();
+}
+function syncToSheets(){
+  if(!S.sheetsUrl){openSheetsSetup();return;}
+  const paid=S.expenses.filter(ex=>ex.status==='paid');
+  const pending=S.expenses.filter(ex=>ex.status==='pending');
+  const payload={
+    paid:paid.map(ex=>({datePaid:ex.datePaid||'',artistName:ex.artistName||'',expenseDescription:ex.expenseDescription||'',amount:ex.amount||0,currency:ex.currency||'',recoupablePercent:ex.recoupablePercent||0,recoupableAmount:ex.recoupableAmount||0,methodPaid:ex.methodPaid||'',participants:(ex.participants||[]).map(p=>p.name+' ('+p.share+'%)').join(', '),run:ex.runId?(S.runs.find(r=>r.id===ex.runId)?.name||''):'Unsubmitted',note:ex.note||''})),
+    pending:pending.map(ex=>({requestedDate:(ex.createdAt||'').split('T')[0],artistName:ex.artistName||'',expenseDescription:ex.expenseDescription||'',amount:ex.amount||0,currency:ex.currency||'',recoupablePercent:ex.recoupablePercent||0,recoupableAmount:ex.recoupableAmount||0,participants:(ex.participants||[]).map(p=>p.name+' ('+p.share+'%)').join(', '),note:ex.note||''})),
+    syncedAt:new Date().toISOString()
+  };
+  showToast('Syncing…');
+  fetch('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheetsUrl:S.sheetsUrl,data:payload})})
+    .then(r=>r.json())
+    .then(()=>{const now=new Date();S.lastSynced=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');showToast('Synced to Google Sheets ✓');if(S.view==='log')renderLog();})
+    .catch(()=>showToast('Sync failed — check your URL'));
+}
+
+document.getElementById('nav').addEventListener('click',ev=>{
+  const nav=ev.target.closest('[data-nav]');
+  if(nav)setView(nav.dataset.nav);
+});
+
+renderAll();
+</script>
+</body>
+</html>
