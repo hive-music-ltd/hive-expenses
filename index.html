@@ -257,7 +257,7 @@ const fmtAmt=(n,c='GBP')=>(c==='GBP'?'£':'$')+Number(n||0).toLocaleString('en-G
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const e=id=>document.getElementById(id);
 
-const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',runCurrency:'GBP',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
+const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',runCurrency:'GBP',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,showArchived:false,sheetsUrl:'',lastSynced:null};
 
 // ── PERSISTENCE ───────────────────────────────────────────
 // Auto-save state to localStorage on every mutation, restore on load.
@@ -365,19 +365,23 @@ function renderAll(){
 
 // ── DASHBOARD ─────────────────────────────────────────────
 function renderDash(){
-  const paid=S.expenses.filter(ex=>ex.status==='paid');
-  const pendingItems=S.expenses.filter(ex=>ex.status==='pending');
-  // Dashboard is now the unified entries view — paid + pending in one
-  // table, with search, currency tabs, and the Sheets-sync button. The
-  // accumulated stats up top still sum gross paid spend per currency.
-  // The recoupable % stays attached to each expense and shows in the row
-  // badge, the docx output, and the Sheets sync payload.
+  // Dashboard is the active expenses view — paid + pending in one table,
+  // with search, currency tabs, and the Sheets-sync button. Once an
+  // expense is included in a Payment Run it's en route to the partner
+  // and falls out of this view (and out of the accumulated tally) — it
+  // lives with its run on the Payment Runs page until that run is
+  // reversed. The recoupable % stays attached to each expense and shows
+  // in the row badge, the docx output, and the Sheets sync payload.
+  const onDash=ex=>!ex.runId;
+  const paid=S.expenses.filter(ex=>ex.status==='paid'&&onDash(ex));
+  const inRunCount=S.expenses.filter(ex=>!!ex.runId).length;
   const gbp=paid.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+(ex.amount||0),0);
   const usd=paid.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+(ex.amount||0),0);
   const dashCur=S.dashCurrency||'all';
   const{search}=S.filters;
   const exps=[...S.expenses]
     .filter(ex=>{
+      if(!onDash(ex))return false;
       if(dashCur!=='all'&&ex.currency!==dashCur)return false;
       if(search){
         const q=search.toLowerCase();
@@ -444,13 +448,20 @@ function renderDash(){
     if(isExp){
       html+=`<tr style="background:#fafafa"><td colspan="9" style="padding:8px 10px 12px">`;
       if(ex.note)html+=`<div class="note-box" style="margin-bottom:8px">📝 ${esc(ex.note)}</div>`;
-      html+=`<div style="font-size:10.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Participant Splits</div><div style="display:flex;gap:24px;flex-wrap:wrap">`;
+      html+=`<div style="font-size:10.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Recouped by</div><div style="display:flex;gap:24px;flex-wrap:wrap">`;
       (ex.participants||[]).forEach(p=>{html+=`<div style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888;font-family:monospace">${p.share}%</span></div>`;});
       html+=`</div></td></tr>`;
     }
   });
   html+=`</tbody></table></div></div>`;
-  if(search||dashCur!=='all')html+=`<div class="mt-2 text-sm text-muted">Showing ${exps.length} of ${S.expenses.length} entries</div>`;
+  // Footnote line: when filters are active OR there are expenses
+  // currently in payment runs, show a small status line so the user
+  // knows where the rest are.
+  const totalActive=S.expenses.filter(ex=>!ex.runId).length;
+  const footParts=[];
+  if(search||dashCur!=='all')footParts.push(`Showing ${exps.length} of ${totalActive} active entries`);
+  if(inRunCount>0)footParts.push(`${inRunCount} in payment run${inRunCount!==1?'s':''} <a href="#runs" onclick="event.preventDefault();setView('runs')" style="color:#087b7a;text-decoration:underline">view →</a>`);
+  if(footParts.length)html+=`<div class="mt-2 text-sm text-muted">${footParts.join(' · ')}</div>`;
   e('content').innerHTML=html;
 }
 
@@ -509,11 +520,11 @@ function renderAddForm(){
         <button onclick="toggleRecoupInfo()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:13px;line-height:1;padding:0;display:flex;align-items:center" title="What does this mean?">ⓘ</button>
       </div>
       <div id="recoup-info" style="display:none;background:#f0fbfb;border:1px solid #b3d9d8;border-radius:6px;padding:10px 12px;font-size:12px;color:#2a6e6d;margin-bottom:8px;line-height:1.55">
-        <strong style="display:block;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#087b7a">Recoupable Deal Types</strong>
-        <div style="margin-bottom:6px"><strong>100% deal</strong> — the full expense amount is recoupable from the artist's royalties. Use this for costs billed entirely to one project: recording sessions, mix/master fees, production advances, exclusive artwork.</div>
-        <div><strong>50% deal</strong> — only half the expense is recoupable. Use this for co-productions or costs shared across multiple parties — e.g. a session where co-producer fees are split, or artwork used across two releases.</div>
+        <strong style="display:block;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#087b7a">Recoupment Types</strong>
+        <div style="margin-bottom:6px"><strong>100% RECOUP</strong> — the full expense amount is recoupable from the artist's royalties. These include — advances, recording sessions, mix fees, master fees, session musicians.</div>
+        <div><strong>50% RECOUP</strong> — only half the expense is recoupable. — e.g. photoshoots, artworks (unless on a production music deal).</div>
       </div>
-      <div class="seg">${[50,100].map(p=>`<div class="so${f.recoupablePercent===p?' on':''}" onclick="setFF('recoupablePercent',${p})">${p}% deal</div>`).join('')}</div>
+      <div class="seg">${[50,100].map(p=>`<div class="so${f.recoupablePercent===p?' on':''}" onclick="setFF('recoupablePercent',${p})">${p}% RECOUP</div>`).join('')}</div>
     </div>
     ${isPaid?`<div class="fg">
       <label class="fl">Method Paid</label>
@@ -536,14 +547,14 @@ function renderAddForm(){
   </div>`:''}
   <div class="divider"></div>
   <div class="flex aic mb-3" style="justify-content:space-between">
-    <div style="font-size:13px;font-weight:900">Participant Splits</div>
+    <div style="font-size:13px;font-weight:900">Recouped by</div>
     <div class="flex gap2">
       <button class="btn ${f.splitsAssigned?'bs':'bcit'} btn-sm" onclick="toggleSplitsAssigned()" title="Toggle whether splits are known yet">${f.splitsAssigned?'Splits TBD':'✓ Splits TBD'}</button>
       ${f.splitsAssigned?`<button class="btn bs btn-sm" onclick="addParticipant()">＋ Add Participant</button>`:''}
     </div>
   </div>
   ${!f.splitsAssigned?`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:10px 12px;font-size:12px;color:#7a6500;line-height:1.55">
-    ⏳ <strong>Splits not assigned yet.</strong> This expense will be saved without participant splits. It won’t appear in payment runs until you come back and assign them.
+    ⏳ <strong>Splits not assigned yet.</strong> This expense will be saved without recouped-by details. It won’t appear in payment runs until you come back and fill them in.
   </div>`:`
   <datalist id="pname-dl">${pNames.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
   <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-left:3px solid #087b7a;border-radius:5px;padding:7px 11px;font-size:11.5px;color:#555;margin-bottom:10px">✎ Use each participant's <strong>full legal name</strong> — double-check spelling before saving</div>
@@ -811,18 +822,45 @@ function _runCur(run){
   return cs.length===1?cs[0]:null; // null if mixed (legacy edge case)
 }
 
+// Render a single run card. Used by both Ready-to-Issue and Archive
+// sections so styling stays consistent.
+function _renderRunCard(run,cur,opts={}){
+  const{archived=false}=opts;
+  const runExps=S.expenses.filter(ex=>ex.runId===run.id);
+  const runTotal=runExps.reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const runC=_runCur(run)||cur;
+  const sentBadge=run.sentAt&&!archived?`<span class="badge bgr" style="margin-left:8px" title="Marked sent ${fmtDate(run.sentAt.split('T')[0])}">Sent ${fmtDate(run.sentAt.split('T')[0])}</span>`:'';
+  const archivedBadge=archived?`<span class="badge bgy" style="margin-left:8px">Archived</span>`:'';
+  const actions=archived
+    ? `<button class="btn bs btn-sm" onclick="viewReport('${run.id}')">👁 Preview</button>
+       <button class="btn bs btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download</button>
+       <button class="btn bt btn-sm" onclick="unarchiveRun('${run.id}')" title="Move back to Ready to Issue">↺ Restore</button>`
+    : `<button class="btn bt btn-sm" onclick="viewReport('${run.id}')">👁 Preview</button>
+       <button class="btn bp btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download .docx</button>
+       <button class="btn bs btn-sm" onclick="markRunSent('${run.id}')" title="Mark this run as sent to the partner">✉ Mark Sent</button>
+       <button class="btn bd btn-sm" onclick="deleteRun('${run.id}')" title="Reverse this run and put its payments back to Unsubmitted">↶ Reverse</button>`;
+  return `<div class="rc"${archived?' style="opacity:.85"':''}><div class="rc-h">
+    <div><div style="font-weight:700;display:flex;align-items:center">${esc(run.name)}${sentBadge}${archivedBadge}</div><div style="font-size:11px;color:#888;margin-top:1px">Created ${fmtDate(run.createdAt?.split('T')[0])} · ${runExps.length} line items</div></div>
+    <div class="flex gap2" style="flex-wrap:wrap;justify-content:flex-end">${actions}</div>
+  </div><div class="rc-b"><div class="rtots">
+    <div class="rtot"><div class="rtl">${runC} Recoupable</div><div class="rtv" style="color:${runC==='GBP'?'#087b7a':'#8a8b03'}">${fmtAmt(runTotal,runC)}</div></div>
+    <div class="rtot"><div class="rtl">Line Items</div><div class="rtv">${runExps.length}</div></div>
+  </div></div></div>`;
+}
+
 function renderRuns(){
-  // Runs are scoped to a single currency at a time — partners get
-  // separate documents for GBP and USD. The active tab governs which
-  // expenses are eligible and which existing runs are shown.
+  // Runs are scoped to a single currency tab. Within the tab, runs are
+  // grouped into "Ready to Issue" (active, possibly with a Sent badge)
+  // and "Archived" (collapsible). New runs default to all-selected so
+  // the common case ("just send the lot") is one click less.
   const cur=S.runCurrency||'GBP';
   const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&splitsReady(ex)&&ex.currency===cur);
   const paidTbd=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&!splitsReady(ex)&&ex.currency===cur);
-  // Show runs whose currency matches; legacy mixed runs (null) show in
-  // both tabs so they're never hidden.
   const visibleRuns=S.runs.filter(r=>{const c=_runCur(r);return c===cur||c===null;});
+  const activeRuns=visibleRuns.filter(r=>!r.archived);
+  const archivedRuns=visibleRuns.filter(r=>r.archived);
 
-  // Currency tab — sits above the heading row, like the dashboard tabs.
+  // Currency tab.
   const tabBar=`<div class="card" style="padding:8px 14px;margin-bottom:12px">
     <div class="flex gap2" style="align-items:center">
       <span style="font-size:11px;color:#888;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Currency</span>
@@ -834,6 +872,7 @@ function renderRuns(){
     const{name,selectedIds}=S.runForm;
     const sel=paidUnsubmitted.filter(ex=>selectedIds.includes(ex.id));
     const selTotal=sel.reduce((s,ex)=>s+ex.recoupableAmount,0);
+    const allSelected=paidUnsubmitted.length>0&&selectedIds.length===paidUnsubmitted.length;
     let html=tabBar+`<div style="max-width:660px"><div class="card">
       <div style="font-size:11px;color:#888;margin-bottom:8px">Creating a <strong>${cur}</strong> run · only ${cur} expenses are eligible.</div>
       <div class="fg"><label class="fl">Run Name *</label>
@@ -841,7 +880,10 @@ function renderRuns(){
       </div>
       <div class="flex aic" style="justify-content:space-between;margin-bottom:8px">
         <div style="font-size:13px;font-weight:700">Select Paid ${cur} Expenses</div>
-        <button class="btn bg btn-sm" onclick="S.runForm.selectedIds=S.runForm.selectedIds.length===${paidUnsubmitted.length}?[]:${JSON.stringify(paidUnsubmitted.map(ex=>ex.id))};renderRuns()">${selectedIds.length===paidUnsubmitted.length?'Deselect all':'Select all'}</button>
+        <label class="flex aic gap2" style="cursor:pointer;font-size:12.5px;color:#444;font-weight:600">
+          <input type="checkbox" ${allSelected?'checked':''} ${paidUnsubmitted.length===0?'disabled':''} onchange="this.checked?S.runForm.selectedIds=${JSON.stringify(paidUnsubmitted.map(ex=>ex.id))}:S.runForm.selectedIds=[];renderRuns()" style="accent-color:#087b7a;width:14px;height:14px">
+          Select all (${paidUnsubmitted.length})
+        </label>
       </div>`;
     if(paidTbd.length>0)html+=`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#7a6500;margin-bottom:10px">⏳ ${paidTbd.length} ${cur} paid expense${paidTbd.length!==1?'s':''} excluded — splits not assigned yet.</div>`;
     if(paidUnsubmitted.length===0)html+=`<div style="padding:16px;text-align:center;color:#bbb;font-size:12.5px">No unsubmitted paid ${cur} expenses available</div>`;
@@ -866,25 +908,65 @@ function renderRuns(){
   }
 
   let html=tabBar+`<div class="sh"><div><div class="st">${cur} Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid ${cur} expense${paidUnsubmitted.length!==1?'s':''}${paidTbd.length>0?` · ${paidTbd.length} pending splits`:''}</div>`:paidTbd.length>0?`<div class="ss">${paidTbd.length} paid ${cur} expense${paidTbd.length!==1?'s':''} waiting on splits</div>`:''}</div>
-    <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="S.creating=true;renderRuns()">＋ New ${cur} Run</button></div>`;
-  if(visibleRuns.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No ${cur} runs yet.</div><div class="es">Log paid ${cur} expenses first, then create a run</div></div>`;
-  [...visibleRuns].reverse().forEach(run=>{
-    const runExps=S.expenses.filter(ex=>ex.runId===run.id);
-    const runTotal=runExps.reduce((s,ex)=>s+ex.recoupableAmount,0);
-    const runC=_runCur(run)||cur;
-    html+=`<div class="rc"><div class="rc-h">
-      <div><div style="font-weight:700">${esc(run.name)}</div><div style="font-size:11px;color:#888;margin-top:1px">Created ${fmtDate(run.createdAt?.split('T')[0])} · ${runExps.length} line items</div></div>
-      <div class="flex gap2">
-        <button class="btn bt btn-sm" onclick="viewReport('${run.id}')">👁 Preview</button>
-        <button class="btn bp btn-sm" onclick="downloadDocx('${run.id}')">⬇ Download .docx</button>
-        <button class="btn bd btn-sm" onclick="deleteRun('${run.id}')" title="Reverse this run and put its payments back to Unsubmitted">↶ Reverse</button>
-      </div>
-    </div><div class="rc-b"><div class="rtots">
-      <div class="rtot"><div class="rtl">${runC} Recoupable</div><div class="rtv" style="color:${runC==='GBP'?'#087b7a':'#8a8b03'}">${fmtAmt(runTotal,runC)}</div></div>
-      <div class="rtot"><div class="rtl">Line Items</div><div class="rtv">${runExps.length}</div></div>
-    </div></div></div>`;
-  });
+    <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="startNewRun()">＋ New ${cur} Run</button></div>`;
+
+  // Ready to Issue section.
+  if(activeRuns.length>0){
+    html+=`<div style="font-size:10px;color:#888;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:14px 0 8px 0">Ready to Issue (${activeRuns.length})</div>`;
+    [...activeRuns].reverse().forEach(run=>{html+=_renderRunCard(run,cur);});
+  }else if(paidUnsubmitted.length===0&&archivedRuns.length===0){
+    html+=`<div class="empty"><div class="ei">📄</div><div class="et">No ${cur} runs yet.</div><div class="es">Log paid ${cur} expenses first, then create a run</div></div>`;
+  }
+
+  // Archive section (collapsible).
+  if(archivedRuns.length>0){
+    const open=!!S.showArchived;
+    html+=`<div style="margin-top:24px">
+      <button class="btn bs btn-sm" onclick="S.showArchived=!S.showArchived;renderRuns()">${open?'▼':'▶'} Archived (${archivedRuns.length})</button>
+    </div>`;
+    if(open){
+      html+=`<div style="margin-top:10px">`;
+      [...archivedRuns].reverse().forEach(run=>{html+=_renderRunCard(run,cur,{archived:true});});
+      html+=`</div>`;
+    }
+  }
+
   e('content').innerHTML=html;
+}
+
+// Helper invoked by the "+ New X Run" button. Pre-selects all eligible
+// expenses so the common case ("send everything") is a single click —
+// users can deselect individuals from there.
+function startNewRun(){
+  const cur=S.runCurrency||'GBP';
+  const eligible=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&splitsReady(ex)&&ex.currency===cur);
+  S.creating=true;
+  S.runForm={name:'',selectedIds:eligible.map(ex=>ex.id)};
+  renderRuns();
+}
+
+// Mark a run as sent to the partner. Records sentAt; then prompts to
+// archive (separate confirm step so users can keep it visible if they
+// want to track recently-sent runs before tucking them away).
+function markRunSent(runId){
+  const run=S.runs.find(r=>r.id===runId);if(!run)return;
+  S.runs=S.runs.map(r=>r.id===runId?{...r,sentAt:new Date().toISOString()}:r);
+  saveState();
+  if(confirm(`"${run.name}" marked as sent to partner.\n\nArchive it now?`)){
+    S.runs=S.runs.map(r=>r.id===runId?{...r,archived:true}:r);
+    saveState();
+    showToast('Run sent and archived');
+  }else{
+    showToast('Run marked sent');
+  }
+  renderRuns();
+}
+
+function unarchiveRun(runId){
+  S.runs=S.runs.map(r=>r.id===runId?{...r,archived:false}:r);
+  saveState();
+  showToast('Run restored');
+  renderRuns();
 }
 
 // Imperatively sync the Create Run button's disabled state when the name
@@ -927,8 +1009,7 @@ function createRun(){
   S.expenses=S.expenses.map(ex=>selectedIds.includes(ex.id)?{...ex,runId:run.id}:ex);
   saveState();
   S.creating=false;S.runForm={name:'',selectedIds:[]};
-  showToast('Run created');
-  viewReport(run.id);
+  showToast('Run created — ready to issue');
   renderRuns();
 }
 
