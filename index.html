@@ -128,8 +128,15 @@ tbody tr:hover td{background:#fafafa}
 /* Note */
 .note-box{background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:7px 10px;font-size:12px;color:#7a6500;margin-top:4px}
 /* ── Run preview "page" — sized to US Letter, Calibri, matches docx ── */
-.report-page{width:8.5in;min-height:11in;padding:0.74in 1in 0.4in 1in;background:#fff;color:#000;font-family:Calibri,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:400;font-size:11pt;line-height:1.25;letter-spacing:normal;box-shadow:0 2px 18px rgba(0,0,0,.18);margin:0 auto;font-feature-settings:normal}
+.report-page{width:8.5in;min-height:11in;padding:0.74in 1in 0.4in 1in;background:#fff;color:#000;font-family:Calibri,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:400;font-size:11pt;line-height:1.25;letter-spacing:normal;box-shadow:0 2px 18px rgba(0,0,0,.18);margin:0 auto;font-feature-settings:normal;flex-shrink:0}
 .report-page *{box-sizing:border-box}
+/* Reset the page-app-wide table styles inside the preview — otherwise
+   the global `th{text-transform:uppercase;...}` and brand kerning bleed
+   in and turn the table headers into "RECOUPABLE FROM:" all caps. */
+.report-page table{font-size:inherit;width:auto}
+.report-page th,.report-page td{padding:0;text-transform:none;letter-spacing:normal;white-space:normal;color:inherit;border-bottom:none}
+.report-page tr:last-child td{border-bottom:initial}
+.report-page tbody tr:hover td{background:inherit}
 .report-page p{margin:0 0 11pt 0;font-size:11pt}
 .report-page b,.report-page strong{font-weight:700}
 .report-page sup{font-size:.7em;vertical-align:super;line-height:0}
@@ -963,7 +970,7 @@ function viewReport(runId){
   // grey backdrop on the body so the page looks like it's floating on a
   // Word-style work surface.
   e('modal-area').innerHTML=`<div class="modal-bg" id="report-modal" onclick="if(event.target.id==='report-modal')closeModal()">
-    <div class="modal" style="max-width:9.2in;width:9.2in;background:#e8e8e8">
+    <div class="modal" style="max-width:min(9.2in,96vw);width:min(9.2in,96vw);background:#e8e8e8">
       <div class="modal-head" style="background:#fff">
         <div style="font-weight:700;font-size:14px">${esc(run.name)} — Preview</div>
         <div class="flex gap2">
@@ -971,7 +978,7 @@ function viewReport(runId){
           <button class="btn bg btn-sm" onclick="closeModal()">✕ Close</button>
         </div>
       </div>
-      <div class="modal-body" style="padding:24px;background:#e8e8e8">${reportPage}</div>
+      <div class="modal-body" style="padding:24px;background:#e8e8e8;overflow-x:auto;display:flex;justify-content:center">${reportPage}</div>
     </div>
   </div>`;
 }
