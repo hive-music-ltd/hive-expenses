@@ -949,105 +949,188 @@ function closeModal(){e('modal-area').innerHTML='';}
 // ── DOCX EXPORT ───────────────────────────────────────────
 function xmlEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-function mkBdr(color,sz=6){return`<w:top w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:left w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:bottom w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/><w:right w:val="single" w:sz="${sz}" w:space="0" w:color="${color}"/>`;}
-function mkNoBdr(){return`<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>`;}
 
-function mkCell(text,opts={}){
-  const{bold=false,bg='',color='',w=0,align='left',bdr='',sz=20,vPad=80,hPad=120}=opts;
-  let tcPr='';
-  if(bg)tcPr+=`<w:shd w:val="clear" w:color="auto" w:fill="${bg}"/>`;
-  if(bdr)tcPr+=`<w:tcBorders>${bdr}</w:tcBorders>`;
-  if(w)tcPr+=`<w:tcW w:w="${w}" w:type="dxa"/>`;
-  tcPr+=`<w:tcMar><w:top w:w="${vPad}" w:type="dxa"/><w:left w:w="${hPad}" w:type="dxa"/><w:bottom w:w="${vPad}" w:type="dxa"/><w:right w:w="${hPad}" w:type="dxa"/></w:tcMar>`;
-  let rPr=`<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
-  if(bold)rPr+='<w:b/>';
-  if(color)rPr+=`<w:color w:val="${color}"/>`;
-  const pPr=`<w:pPr><w:jc w:val="${align}"/><w:spacing w:after="0"/></w:pPr>`;
-  return`<w:tc>${tcPr?`<w:tcPr>${tcPr}</w:tcPr>`:''}<w:p>${pPr}<w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r></w:p></w:tc>`;
+
+
+
+
+// Calibri throughout — matches the partner-facing reference doc.
+const CAL_PBDR=`<w:pBdr><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:between w:val="nil"/></w:pBdr>`;
+const CAL_NIL_PBDR=`<w:pBdr><w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:between w:val="none" w:sz="0" w:space="0" w:color="auto"/></w:pBdr>`;
+
+function calRPr(opts={}){
+  const{bold=false,whiteText=false,color='000000',sz=''}=opts;
+  let s=`<w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>`;
+  if(bold)s+='<w:b/>';
+  if(whiteText)s+='<w:color w:val="FFFFFF"/>';
+  else if(color)s+=`<w:color w:val="${color}"/>`;
+  if(sz)s+=`<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
+  return s;
 }
-
-function mkTbl(rows,colWidths,opts={}){
-  const total=colWidths.reduce((s,w)=>s+w,0);
-  const grid=colWidths.map(w=>`<w:gridCol w:w="${w}"/>`).join('');
-  const insideBdr=opts.insideBdr||'<w:insideH w:val="none"/><w:insideV w:val="none"/>';
-  return`<w:tbl><w:tblPr><w:tblW w:w="${total}" w:type="dxa"/><w:tblBorders>${insideBdr}</w:tblBorders><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
+function calRun(text,opts={}){return`<w:r><w:rPr>${calRPr(opts)}</w:rPr><w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r>`;}
+function calEmptyP(){return`<w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr({bold:true})}</w:rPr></w:pPr></w:p>`;}
+function calLabelLine(label,value){
+  return`<w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr({bold:true})}</w:rPr></w:pPr>${calRun(label+' ',{bold:true})}${value?calRun(value):''}</w:p>`;
 }
-
-function mkRow(cells){return`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`;}
-
-function mkPara(text,opts={}){
-  const{bold=false,sz=20,before=0,after=120}=opts;
-  let rPr=`<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
-  if(bold)rPr+='<w:b/>';
-  return`<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/></w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r></w:p>`;
+function _ordinal(n){const v=n%100;if(v>=11&&v<=13)return'th';switch(n%10){case 1:return'st';case 2:return'nd';case 3:return'rd';default:return'th';}}
+function _runDate(run){
+  const d=run&&run.createdAt?new Date(run.createdAt):new Date();
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return{month:months[d.getMonth()],day:d.getDate(),year:d.getFullYear()};
+}
+function _coreBox(){
+  const labels=['CORE DISB ID','ACCT ENTRY DATE','PAID DATE','CASE#'];
+  const rows=labels.map((l,i)=>`<w:tr><w:trPr><w:trHeight w:val="${i===0?740:658}"/></w:trPr>
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="2328" w:type="dxa"/>
+        <w:tcBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders>
+        <w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tcMar>
+      </w:tcPr>
+      <w:p><w:pPr>${CAL_PBDR}<w:jc w:val="center"/><w:rPr>${calRPr()}</w:rPr></w:pPr>${calRun(l,{bold:true})}</w:p>
+    </w:tc>
+  </w:tr>`).join('');
+  return`<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="2328" w:type="dxa"/>
+      <w:tblInd w:w="216" w:type="dxa"/>
+      <w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/></w:tblBorders>
+      <w:tblLayout w:type="fixed"/>
+      <w:tblLook w:val="0400" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
+    </w:tblPr>
+    <w:tblGrid><w:gridCol w:w="2328"/></w:tblGrid>
+    ${rows}
+  </w:tbl>`;
+}
+function _mainTable(runExps){
+  const cols=[1947,1885,2086,1450,1976];
+  const hdrLabels=['Recoupable from:','Participation Share','Participation Amount','Recoupable %','Recoupable Amount'];
+  const hdrCell=label=>`<w:tc>
+    <w:tcPr>
+      <w:tcW w:w="0" w:type="auto"/>
+      <w:tcBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/></w:tcBorders>
+      <w:shd w:val="clear" w:color="auto" w:fill="000000"/>
+      <w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="45" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="45" w:type="dxa"/></w:tcMar>
+    </w:tcPr>
+    <w:p><w:pPr>${CAL_NIL_PBDR}<w:jc w:val="center"/><w:rPr>${calRPr({bold:true,whiteText:true})}</w:rPr></w:pPr>
+      <w:r><w:rPr>${calRPr({bold:true,whiteText:true})}</w:rPr><w:t xml:space="preserve">${xmlEsc(label)}</w:t></w:r>
+    </w:p>
+  </w:tc>`;
+  const headerRow=`<w:tr><w:trPr><w:trHeight w:val="300"/></w:trPr>${hdrLabels.map(hdrCell).join('')}</w:tr>`;
+  const dataCell=lines=>{
+    const rPr=calRPr({sz:'18'});
+    const inner=lines.map((t,i)=>(i===0?'':'<w:br/>')+`<w:t xml:space="preserve">${xmlEsc(t)}</w:t>`).join('');
+    return`<w:tc>
+      <w:tcPr>
+        <w:tcW w:w="0" w:type="auto"/>
+        <w:tcBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/></w:tcBorders>
+        <w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="45" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="45" w:type="dxa"/></w:tcMar>
+      </w:tcPr>
+      <w:p><w:pPr>${CAL_NIL_PBDR}<w:jc w:val="center"/><w:rPr>${rPr}</w:rPr></w:pPr>
+        ${inner?`<w:r><w:rPr>${rPr}</w:rPr>${inner}</w:r>`:''}
+      </w:p>
+    </w:tc>`;
+  };
+  const dataRows=runExps.map(ex=>{
+    const parts=ex.participants||[];
+    const names=parts.map(p=>p.name||'');
+    const shares=parts.map(p=>String(p.share));
+    return`<w:tr><w:trPr><w:trHeight w:val="300"/></w:trPr>${
+      dataCell(names)+dataCell(shares)+dataCell([''])+
+      dataCell([String(ex.recoupablePercent)])+
+      dataCell([fmtAmt(ex.recoupableAmount,ex.currency)])
+    }</w:tr>`;
+  }).join('');
+  return`<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="0" w:type="dxa"/>
+      <w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>
+      <w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
+    </w:tblPr>
+    <w:tblGrid>${cols.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>
+    ${headerRow}${dataRows}
+  </w:tbl>`;
+}
+function _wireBox(){
+  const labels=['Bank Name & Address:','Account Number:','Swift Code/Routing Number:','IBAN (international wires):'];
+  const tcBorders=`<w:tcBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders>`;
+  const tcMar=`<w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tcMar>`;
+  const rows=labels.map(l=>`<w:tr><w:trPr><w:trHeight w:val="300"/></w:trPr>
+    <w:tc><w:tcPr><w:tcW w:w="3232" w:type="dxa"/>${tcBorders}${tcMar}</w:tcPr>
+      <w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr()}</w:rPr></w:pPr>${calRun(l)}</w:p>
+    </w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="7105" w:type="dxa"/>${tcBorders}${tcMar}</w:tcPr><w:p/></w:tc>
+  </w:tr>`).join('');
+  return`<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="10337" w:type="dxa"/>
+      <w:tblInd w:w="216" w:type="dxa"/>
+      <w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="FFFFFF"/></w:tblBorders>
+      <w:tblLayout w:type="fixed"/>
+      <w:tblLook w:val="0400" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
+    </w:tblPr>
+    <w:tblGrid><w:gridCol w:w="3232"/><w:gridCol w:w="7105"/></w:tblGrid>
+    ${rows}
+  </w:tbl>`;
 }
 
 function buildDocXml(run,runExps){
-  // Content width: 9360 DXA (US Letter 8.5" - 2" margins)
-  const noBdr=mkNoBdr();
-  const blkBdr=mkBdr('000000',6);
-  const gryBdr=mkBdr('CCCCCC',4);
-
-  // 1. Artist/Service invisible table
-  const artistTbl=mkTbl(
-    mkRow(mkCell('Artist',{bold:true,w:2400,bdr:noBdr})+mkCell('',{w:800,bdr:noBdr})+mkCell('Service',{bold:true,w:2400,bdr:noBdr})+mkCell('',{w:3760,bdr:noBdr})),
-    [2400,800,2400,3760]
-  );
-
-  // 2. CORE DISB ID box
-  const coreRows=[['CORE DISB ID',''],['ACCT ENTRY DATE',''],['PAID DATE',''],['CASE#','']].map(([k,v])=>
-    mkRow(mkCell(k,{bold:true,w:2520,bdr:blkBdr})+mkCell(v,{w:4000,bdr:blkBdr}))
-  ).join('');
-  const coreTbl=mkTbl(coreRows,[2520,4000]);
-
-  // 3. Meta table
-  const metaRows=[
-    ['Payee:',''],['Pay To:','Hive Music Limited'],['Amount Paid by Position:','100%'],
-    ['Payment Description:','Production Expenses'],["A\u0026R:",'Rick & Robin'],
-    ['Artist:','Various'],['Album code:','Various']
-  ].map(([k,v])=>mkRow(mkCell(k,{bold:true,w:2800,bdr:noBdr})+mkCell(v,{w:6560,bdr:noBdr}))).join('');
-  const metaTbl=mkTbl(metaRows,[2800,6560]);
-
-  // 4. Main expense table
-  const colW=[3276,1685,1685,1123,1591];
-  const hdrs=['Recoupable from:','Participation Share','Participation Amount','Recoupable %','Recoupable Amount'];
-  const aligns=['left','right','left','center','right'];
-  const hdrRow=mkRow(hdrs.map((h,i)=>mkCell(h,{bold:true,bg:'000000',color:'FFFFFF',w:colW[i],bdr:gryBdr,align:aligns[i]})).join(''));
-  const dataRows=runExps.flatMap(ex=>(ex.participants||[]).map((p,i)=>{
-    const isFirst=i===0;
-    return mkRow(
-      mkCell(p.name,{w:colW[0],bdr:gryBdr})+
-      mkCell(p.share+'%',{w:colW[1],bdr:gryBdr,align:'right'})+
-      mkCell('',{w:colW[2],bdr:gryBdr})+
-      mkCell(isFirst?ex.recoupablePercent+'%':'',{w:colW[3],bdr:gryBdr,align:'center'})+
-      mkCell(isFirst?fmtAmt(ex.recoupableAmount,ex.currency):'',{w:colW[4],bdr:gryBdr,align:'right',bold:isFirst})
-    );
-  })).join('');
-  const mainTbl=mkTbl(hdrRow+dataRows,colW,{insideBdr:`<w:insideH w:val="single" w:sz="4" w:color="CCCCCC"/><w:insideV w:val="single" w:sz="4" w:color="CCCCCC"/>`});
-
-  // 5. Wire details
-  const wireRows=[
-    ['Bank Name & Address:',''],['Account Number:',''],
-    ['Swift Code/Routing Number:',''],['IBAN (international wires):','']
-  ].map(([k,v])=>mkRow(mkCell(k,{bold:true,w:2800,bdr:`<w:bottom w:val="single" w:sz="4" w:color="DDDDDD"/><w:top w:val="none"/><w:left w:val="none"/><w:right w:val="none"/>`})+mkCell(v,{w:6560,bdr:`<w:bottom w:val="single" w:sz="4" w:color="DDDDDD"/><w:top w:val="none"/><w:left w:val="none"/><w:right w:val="none"/>`}))).join('');
-  const wireTbl=mkTbl(wireRows,[2800,6560]);
-
-  const body=[
-    artistTbl,mkPara('',{after:100}),
-    coreTbl,mkPara('',{after:100}),
-    metaTbl,mkPara('',{after:100}),
-    mainTbl,mkPara('',{after:100}),
-    mkPara('Payment Method:',{bold:true,after:80}),
-    mkPara('',{after:100}),
-    mkPara('Wire Details:',{bold:true,after:80}),
-    wireTbl
-  ].join('');
-
+  const tabs='<w:tab/>'.repeat(11);
+  const artistP=`<w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr({bold:true})}</w:rPr></w:pPr><w:r><w:rPr>${calRPr({bold:true})}</w:rPr>${tabs}<w:t xml:space="preserve"> Artist</w:t></w:r></w:p>`;
+  const serviceP=`<w:p><w:pPr>${CAL_PBDR}<w:ind w:left="7200" w:firstLine="720"/><w:rPr>${calRPr({bold:true})}</w:rPr></w:pPr>${calRun(' Service',{bold:true})}</w:p>`;
+  const body=
+    artistP+serviceP+_coreBox()+
+    calEmptyP()+calLabelLine('Payee:','')+
+    calEmptyP()+calLabelLine('Pay To:','Hive Music Limited')+
+    calEmptyP()+calLabelLine('Amount Paid by Position:','100%')+
+    calEmptyP()+calLabelLine('Payment Description:','Production Expenses')+
+    calEmptyP()+calLabelLine('A&R:','Rick & Robin')+
+    calEmptyP()+calLabelLine('Artist:','Various')+
+    calEmptyP()+calLabelLine('Album code:','Various')+
+    calEmptyP()+calEmptyP()+
+    _mainTable(runExps)+
+    `<w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr({bold:true})}</w:rPr></w:pPr>${calRun('Payment Method:  ',{bold:true})}</w:p>`+
+    calEmptyP()+calEmptyP()+
+    `<w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr()}</w:rPr></w:pPr>${calRun('Wire Details:',{bold:true})}${calRun(' ')}</w:p>`+
+    _wireBox();
+  const sectPr=`<w:sectPr>
+    <w:headerReference w:type="default" r:id="rId4"/>
+    <w:footerReference w:type="default" r:id="rId5"/>
+    <w:pgSz w:w="12240" w:h="15840"/>
+    <w:pgMar w:top="1062" w:right="1440" w:bottom="576" w:left="1440" w:header="432" w:footer="720" w:gutter="0"/>
+    <w:pgNumType w:start="1"/>
+    <w:cols w:space="720"/>
+  </w:sectPr>`;
   return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<w:body>${body}
-<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>
-</w:body></w:document>`;
+<w:body>${body}${sectPr}</w:body></w:document>`;
+}
+
+function buildHeaderXml(run){
+  const{month,day,year}=_runDate(run);
+  const ord=_ordinal(day);
+  return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr>${CAL_PBDR}
+      <w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab w:val="right" w:pos="9360"/></w:tabs>
+      <w:rPr>${calRPr()}</w:rPr>
+    </w:pPr>
+    <w:r><w:rPr>${calRPr()}</w:rPr><w:t xml:space="preserve">${month} ${day}</w:t></w:r>
+    <w:r><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:vertAlign w:val="superscript"/></w:rPr><w:t>${ord}</w:t></w:r>
+    <w:r><w:rPr>${calRPr()}</w:rPr><w:t xml:space="preserve"> ${year}</w:t></w:r>
+    <w:r><w:rPr>${calRPr()}</w:rPr><w:tab/></w:r>
+    <w:r><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:b/><w:color w:val="000000"/><w:sz w:val="36"/><w:szCs w:val="36"/><w:u w:val="single"/></w:rPr><w:t>Payment Request</w:t></w:r>
+    <w:r><w:rPr>${calRPr()}</w:rPr><w:tab/><w:t>Hive Music Ltd</w:t></w:r>
+  </w:p>
+</w:hdr>`;
+}
+
+function buildFooterXml(){
+  return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr>${CAL_PBDR}<w:rPr>${calRPr()}</w:rPr></w:pPr></w:p>
+</w:ftr>`;
 }
 
 async function downloadDocx(runId){
@@ -1055,22 +1138,23 @@ async function downloadDocx(runId){
   if(typeof JSZip==='undefined'){showToast('JSZip not loaded');return;}
   const runExps=S.expenses.filter(ex=>ex.runId===runId);
   const docXml=buildDocXml(run,runExps);
+  const headerXml=buildHeaderXml(run);
+  const footerXml=buildFooterXml();
+  const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`;
   const zip=new JSZip();
-  zip.file('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`);
+  zip.file('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`);
   zip.folder('_rels').file('.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
   const word=zip.folder('word');
-  word.folder('_rels').file('document.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+  word.folder('_rels').file('document.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>`);
   word.file('document.xml',docXml);
-  word.file('styles.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`);
+  word.file('header1.xml',headerXml);
+  word.file('footer1.xml',footerXml);
+  word.file('styles.xml',stylesXml);
   try{
     const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     const url=URL.createObjectURL(blob);
-    // Strip filesystem-unsafe chars from the run name so e.g. a slash
-    // doesn't produce a malformed download filename.
     const safeName=(run.name||'payment-run').replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim().slice(0,100)||'payment-run';
     const a=document.createElement('a');a.href=url;a.download=`${safeName}.docx`;a.click();
-    // Defer revoke — Firefox can race the download if revoke fires before
-    // the browser starts the transfer.
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     showToast('Document downloaded');
   }catch(err){showToast('Error generating document: '+err.message);}
