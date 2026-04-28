@@ -5,6 +5,7 @@
 <title>Hive Expenses</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Open+Sauce+Sans:wght@500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{color-scheme:light}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -201,7 +202,7 @@ input,select,textarea,button{font-family:inherit;letter-spacing:inherit}
       <div class="sb-tag">Expenses</div>
     </div>
     <nav class="sb-nav" id="nav"></nav>
-    <div class="sb-foot">Hive Music Limited</div>
+    <div class="sb-foot" id="sb-foot">Hive Music Limited</div>
   </div>
   <div class="main">
     <div class="tbar">
@@ -213,37 +214,112 @@ input,select,textarea,button{font-family:inherit;letter-spacing:inherit}
 </div>
 
 <div id="auth-screen" style="position:fixed;inset:0;background:#0d0d0d;z-index:99999;display:flex;align-items:center;justify-content:center">
-  <div style="width:100%;max-width:340px;padding:0 24px">
+  <div style="width:100%;max-width:360px;padding:0 24px">
     <div style="margin-bottom:28px;text-align:center">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#444;margin-bottom:6px">Hive Music Limited</div>
-      <div style="font-size:11px;color:#2a2a2a;letter-spacing:.05em;text-transform:uppercase">Expenses</div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:6px">Hive Music Limited</div>
+      <div style="font-size:11px;color:#666;letter-spacing:.05em;text-transform:uppercase">Expenses</div>
     </div>
-    <input id="auth-input" type="password" placeholder="Password" style="width:100%;background:#111;border:1px solid #222;border-radius:7px;padding:11px 14px;font-size:14px;color:#fff;font-family:inherit;outline:none;margin-bottom:10px;box-sizing:border-box" onkeydown="if(event.key==='Enter')checkAuth()">
-    <div id="auth-err" style="color:#dc2626;font-size:11.5px;margin-bottom:8px;display:none">Incorrect password</div>
-    <button onclick="checkAuth()" style="width:100%;background:#087b7a;color:#fff;border:none;border-radius:7px;padding:11px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit">Enter</button>
+    <div id="auth-form-block">
+      <input id="auth-input" type="email" placeholder="you@hivemusic.com" autocomplete="email" style="width:100%;background:#111;border:1px solid #222;border-radius:7px;padding:11px 14px;font-size:14px;color:#fff;font-family:inherit;outline:none;margin-bottom:10px;box-sizing:border-box" onkeydown="if(event.key==='Enter')sendMagicLink()">
+      <div id="auth-err" style="color:#dc2626;font-size:11.5px;margin-bottom:8px;display:none"></div>
+      <button id="auth-send-btn" onclick="sendMagicLink()" style="width:100%;background:#087b7a;color:#fff;border:none;border-radius:7px;padding:11px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit">Send Magic Link</button>
+      <div style="margin-top:14px;font-size:11px;color:#555;line-height:1.55;text-align:center">We'll email you a one-tap sign-in link.<br>No password to remember.</div>
+    </div>
+    <div id="auth-sent-block" style="display:none;text-align:center">
+      <div style="font-size:32px;margin-bottom:10px">📬</div>
+      <div style="font-size:14px;color:#ddd;font-weight:700;margin-bottom:6px">Check your inbox</div>
+      <div id="auth-sent-email" style="font-size:12px;color:#888;margin-bottom:16px"></div>
+      <button onclick="resetAuthForm()" style="background:transparent;color:#666;border:none;font-size:11.5px;cursor:pointer;font-family:inherit;text-decoration:underline">Use a different email</button>
+    </div>
+    <div id="auth-loading" style="display:none;text-align:center;color:#666;font-size:12px">Signing you in…</div>
   </div>
 </div>
 <script>
-(function(){
-  if(sessionStorage.getItem('hive-auth')==='ok'){
-    document.getElementById('auth-screen').style.display='none';
+// Supabase-backed auth. Replaces the old shared-password gate. The
+// publishable key is safe in client JS — RLS on the tables enforces that
+// only signed-in users can see/write rows, and only the Hive team is
+// invited via Supabase Auth → Users.
+const SUPABASE_URL='https://ohfjeduegkvohwkbzqvk.supabase.co';
+const SUPABASE_KEY='sb_publishable_DAf8g333Nd4N5YW4GQplgA_0S4M5KRu';
+window.sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
+
+function _authShow(which){
+  ['auth-form-block','auth-sent-block','auth-loading'].forEach(id=>{
+    document.getElementById(id).style.display=id===which?(id==='auth-form-block'?'block':'block'):'none';
+  });
+}
+function resetAuthForm(){_authShow('auth-form-block');document.getElementById('auth-err').style.display='none';document.getElementById('auth-input').value='';setTimeout(()=>document.getElementById('auth-input').focus(),50);}
+
+async function sendMagicLink(){
+  const inp=document.getElementById('auth-input');
+  const err=document.getElementById('auth-err');
+  const btn=document.getElementById('auth-send-btn');
+  const email=(inp.value||'').trim().toLowerCase();
+  err.style.display='none';
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    err.textContent='Please enter a valid email';err.style.display='block';return;
   }
-})();
-// NOTE: this is a UX gate, not real authentication. The password lives in
-// client JS and can be read by anyone who views source. Anything sensitive
-// must be protected on the server side (e.g. the Apps Script web app's own
-// auth). Fine as a "don't accidentally end up here" speed bump.
-function checkAuth(){
-  const val=document.getElementById('auth-input').value;
-  if(val==='Hivetest123'){
-    sessionStorage.setItem('hive-auth','ok');
-    document.getElementById('auth-screen').style.display='none';
-  } else {
-    document.getElementById('auth-err').style.display='block';
-    document.getElementById('auth-input').value='';
-    document.getElementById('auth-input').focus();
+  btn.disabled=true;btn.textContent='Sending…';
+  try{
+    // shouldCreateUser:false means only pre-invited users (added via
+    // Authentication → Users → Invite User in the Supabase dashboard)
+    // can request a magic link. Random emails get a polite "no account".
+    const{error}=await window.sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname,shouldCreateUser:false}});
+    if(error)throw error;
+    document.getElementById('auth-sent-email').textContent=email;
+    _authShow('auth-sent-block');
+  }catch(e){
+    err.textContent=e.message||'Could not send link. Try again.';err.style.display='block';
+  }finally{
+    btn.disabled=false;btn.textContent='Send Magic Link';
   }
 }
+
+async function signOut(){
+  if(!confirm('Sign out?'))return;
+  await window.sb.auth.signOut();
+  location.reload();
+}
+
+// If we land here from a magic link, supabase-js parses the URL hash
+// behind the scenes and fires onAuthStateChange. Show a brief loader
+// during that round-trip so the user isn't staring at the email form
+// with the link already used.
+(function(){
+  const hasHashAuth=/access_token=|refresh_token=|type=magiclink|type=recovery|code=/.test(location.hash+location.search);
+  if(hasHashAuth)_authShow('auth-loading');
+})();
+
+window.sb.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
+    if(session?.user){
+      // Strip auth params from the URL so a refresh doesn't replay them.
+      if(/access_token=|refresh_token=|code=/.test(location.hash+location.search)){
+        history.replaceState({},'',location.pathname+'#'+(window.S?.view||'dashboard'));
+      }
+      window._authedUser=session.user;
+      document.getElementById('auth-screen').style.display='none';
+      if(typeof window.bootApp==='function')window.bootApp(session.user);
+    }
+  }else if(event==='SIGNED_OUT'){
+    window._authedUser=null;
+    location.reload();
+  }
+});
+
+// Bootstrap: try existing session synchronously so we don't flash the
+// auth screen for already-signed-in users.
+window.sb.auth.getSession().then(({data})=>{
+  if(!data.session){
+    // No session — show form (or the loader if magic-link is in flight).
+    if(document.getElementById('auth-loading').style.display!=='block'){
+      _authShow('auth-form-block');
+      setTimeout(()=>document.getElementById('auth-input').focus(),50);
+    }
+  }
+  // If there *is* a session, onAuthStateChange("INITIAL_SESSION") will
+  // hide the screen and call bootApp.
+});
 </script>
 
 <div id="toast-area"></div>
@@ -259,36 +335,123 @@ const e=id=>document.getElementById(id);
 
 const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',runCurrency:'GBP',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,showArchived:false,sheetsUrl:'',lastSynced:null};
 
-// ── PERSISTENCE ───────────────────────────────────────────
-// Auto-save state to localStorage on every mutation, restore on load.
-// Note: invoice files are base64 data URLs and can fill the ~5MB quota
-// quickly; saveState() will warn via toast if that happens, but the
-// in-memory state survives for the session — Export JSON is the safety
-// net for big invoice attachments.
+// ── PERSISTENCE / SUPABASE ─────────────────────────────────
+// All shared data (expenses + runs) lives in Supabase Postgres so the
+// whole team sees the same view. Real-time subscriptions push changes
+// from any client into S and re-render. Per-browser settings (the
+// Sheets sync URL, the legacy localStorage cache) stay local.
 const STORAGE_KEY='hive-expenses-state-v1';
-function saveState(){
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({expenses:S.expenses,runs:S.runs,sheetsUrl:S.sheetsUrl}));
-  }catch(err){
-    console.warn('saveState failed:',err);
-    showToast('⚠ Couldn’t auto-save — storage may be full. Export JSON.');
-  }
-}
-function loadState(){
+const SHEETS_URL_KEY='hive-sheets-url-v1';
+
+// Pre-Supabase localStorage payload, surfaced for the one-time import
+// banner so users don't lose anything sitting in their browser.
+let _legacyState=null;
+function _readLegacyLocal(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
-    if(!raw)return;
+    if(!raw)return null;
     const d=JSON.parse(raw);
-    if(Array.isArray(d.expenses))S.expenses=d.expenses;
-    if(Array.isArray(d.runs))S.runs=d.runs;
-    if(typeof d.sheetsUrl==='string')S.sheetsUrl=d.sheetsUrl;
-  }catch(err){
-    console.warn('loadState failed:',err);
-  }
+    const exps=Array.isArray(d.expenses)?d.expenses:[];
+    const runs=Array.isArray(d.runs)?d.runs:[];
+    if(exps.length===0&&runs.length===0)return null;
+    return{expenses:exps,runs,sheetsUrl:typeof d.sheetsUrl==='string'?d.sheetsUrl:''};
+  }catch{return null;}
 }
+
+// saveState is now a no-op — kept so any stragglers don't crash. All
+// real writes go through the targeted db helpers below.
+function saveState(){}
+function loadState(){}
+
 // Treat undefined/true as "splits assigned" for backward compat with
 // expenses saved before the splitsAssigned flag existed.
 const splitsReady=ex=>ex.splitsAssigned!==false;
+
+// ── DB layer ──────────────────────────────────────────────
+const db={
+  // camelCase JS objects ↔ snake_case DB rows.
+  expFromRow(r){return{id:r.id,createdAt:r.created_at,status:r.status,artistName:r.artist_name,expenseDescription:r.expense_description,datePaid:r.date_paid,amount:Number(r.amount),currency:r.currency,recoupablePercent:r.recoupable_percent,recoupableAmount:Number(r.recoupable_amount),splitsAssigned:r.splits_assigned!==false,participants:r.participants||[],methodPaid:r.method_paid||'',invoiceFile:r.invoice_file,note:r.note||'',runId:r.run_id};},
+  expToRow(e){return{id:e.id,created_at:e.createdAt||new Date().toISOString(),status:e.status,artist_name:e.artistName,expense_description:e.expenseDescription,date_paid:e.datePaid||null,amount:e.amount,currency:e.currency,recoupable_percent:e.recoupablePercent,recoupable_amount:e.recoupableAmount,splits_assigned:e.splitsAssigned!==false,participants:e.participants||[],method_paid:e.methodPaid||'',invoice_file:e.invoiceFile||null,note:e.note||'',run_id:e.runId||null};},
+  runFromRow(r){return{id:r.id,createdAt:r.created_at,name:r.name,currency:r.currency,expenseIds:r.expense_ids||[],total:Number(r.total||0),totalGBP:Number(r.total_gbp||0),totalUSD:Number(r.total_usd||0),archived:!!r.archived,sentAt:r.sent_at};},
+  runToRow(r){return{id:r.id,created_at:r.createdAt||new Date().toISOString(),name:r.name,currency:r.currency||null,expense_ids:r.expenseIds||[],total:r.total||0,total_gbp:r.totalGBP||0,total_usd:r.totalUSD||0,archived:!!r.archived,sent_at:r.sentAt||null};},
+
+  async loadAll(){
+    const[exr,rnr]=await Promise.all([
+      window.sb.from('expenses').select('*').order('created_at',{ascending:true}),
+      window.sb.from('runs').select('*').order('created_at',{ascending:true}),
+    ]);
+    if(exr.error)throw exr.error;
+    if(rnr.error)throw rnr.error;
+    S.expenses=(exr.data||[]).map(db.expFromRow);
+    S.runs=(rnr.data||[]).map(db.runFromRow);
+  },
+
+  async saveExpense(exp){
+    const{error}=await window.sb.from('expenses').upsert(db.expToRow(exp),{onConflict:'id'});
+    if(error){console.warn('saveExpense:',error);showToast('⚠ Sync failed: '+error.message);}
+  },
+  async saveExpenses(exps){
+    if(!exps.length)return;
+    const{error}=await window.sb.from('expenses').upsert(exps.map(db.expToRow),{onConflict:'id'});
+    if(error){console.warn('saveExpenses:',error);showToast('⚠ Sync failed: '+error.message);}
+  },
+  async delExpense(id){
+    const{error}=await window.sb.from('expenses').delete().eq('id',id);
+    if(error){console.warn('delExpense:',error);showToast('⚠ Sync failed: '+error.message);}
+  },
+  async saveRun(run){
+    const{error}=await window.sb.from('runs').upsert(db.runToRow(run),{onConflict:'id'});
+    if(error){console.warn('saveRun:',error);showToast('⚠ Sync failed: '+error.message);}
+  },
+  async delRun(id){
+    const{error}=await window.sb.from('runs').delete().eq('id',id);
+    if(error){console.warn('delRun:',error);showToast('⚠ Sync failed: '+error.message);}
+  },
+
+  // Realtime: any change made by another teammate (or this user in
+  // another tab) flows into S and triggers a re-render. Idempotent
+  // for our own writes — we re-receive what we just sent and overwrite
+  // S.expenses[i] with the same shape, which is fine.
+  subscribe(){
+    if(db._channel)return;
+    db._channel=window.sb.channel('hive-data')
+      .on('postgres_changes',{event:'*',schema:'public',table:'expenses'},payload=>{
+        const{eventType,new:n,old}=payload;
+        if(eventType==='DELETE'){
+          S.expenses=S.expenses.filter(ex=>ex.id!==(old&&old.id));
+        }else{
+          const exp=db.expFromRow(n);
+          const i=S.expenses.findIndex(ex=>ex.id===exp.id);
+          if(i>=0)S.expenses[i]=exp;else S.expenses.push(exp);
+        }
+        if(typeof renderAll==='function')renderAll();
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'runs'},payload=>{
+        const{eventType,new:n,old}=payload;
+        if(eventType==='DELETE'){
+          S.runs=S.runs.filter(r=>r.id!==(old&&old.id));
+        }else{
+          const run=db.runFromRow(n);
+          const i=S.runs.findIndex(r=>r.id===run.id);
+          if(i>=0)S.runs[i]=run;else S.runs.push(run);
+        }
+        if(typeof renderAll==='function')renderAll();
+      })
+      .subscribe();
+  },
+
+  async bulkImport({expenses,runs}){
+    // Runs first because expenses reference them via run_id.
+    if(runs&&runs.length){
+      const{error}=await window.sb.from('runs').upsert(runs.map(db.runToRow),{onConflict:'id'});
+      if(error)throw error;
+    }
+    if(expenses&&expenses.length){
+      const{error}=await window.sb.from('expenses').upsert(expenses.map(db.expToRow),{onConflict:'id'});
+      if(error)throw error;
+    }
+  },
+};
 
 function freshForm(init){
   if(init)return{...init,_isEdit:true,splitsAssigned:init.splitsAssigned!==false,participants:(init.participants||[]).map(p=>({...p,id:uid()})),errors:{}};
@@ -393,7 +556,26 @@ function renderDash(){
     })
     .sort((a,b)=>new Date(b.datePaid||b.createdAt)-new Date(a.datePaid||a.createdAt));
 
-  let html=`<div class="stats">
+  let html='';
+  // One-time legacy localStorage migration banner. Shown when there's
+  // pre-Supabase data sitting in this browser. Click "Import" to push
+  // it up; "Discard" to drop it. Either way the banner goes away.
+  if(_legacyState){
+    const lc=_legacyState.expenses.length, lr=_legacyState.runs.length;
+    html+=`<div class="card" style="margin-bottom:12px;background:#fffdf0;border-color:#f0e68c">
+      <div class="flex aic gap2" style="justify-content:space-between;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-weight:700;color:#7a6500;margin-bottom:2px">📦 Import data from this browser?</div>
+          <div style="font-size:11.5px;color:#7a6500">Found ${lc} expense${lc!==1?'s':''} and ${lr} run${lr!==1?'s':''} saved locally. Push to the shared database so the team can see it.</div>
+        </div>
+        <div class="flex gap2">
+          <button class="btn bg btn-sm" onclick="dismissLegacy()">Discard</button>
+          <button id="migrate-btn" class="btn bp btn-sm" onclick="migrateLegacy()">Import to Supabase</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  html+=`<div class="stats">
     <div class="stat"><div class="s-lbl">Accumulated £</div><div class="s-val pk">${fmtAmt(gbp,'GBP')}</div></div>
     <div class="stat"><div class="s-lbl">Accumulated $</div><div class="s-val tl">${fmtAmt(usd,'USD')}</div></div>
   </div>`;
@@ -729,8 +911,8 @@ function submitForm(){
     note:f.note.trim(),
     runId:f._isEdit?f.runId:null,
   };
-  if(f._isEdit){S.expenses=S.expenses.map(ex=>ex.id===exp.id?exp:ex);saveState();showToast('Payment updated');setView('dashboard');}
-  else{S.expenses.push(exp);saveState();showToast(f.paymentType==='paid'?'Payment logged':'Payment request submitted');if(f.saveAnother){S.form=freshForm();renderAddForm();}else{setView(f.paymentType==='pending'?'pending':'dashboard');}}
+  if(f._isEdit){S.expenses=S.expenses.map(ex=>ex.id===exp.id?exp:ex);db.saveExpense(exp);showToast('Payment updated');setView('dashboard');}
+  else{S.expenses.push(exp);db.saveExpense(exp);showToast(f.paymentType==='paid'?'Payment logged':'Payment request submitted');if(f.saveAnother){S.form=freshForm();renderAddForm();}else{setView(f.paymentType==='pending'?'pending':'dashboard');}}
 }
 
 // ── NEEDS PAYING ──────────────────────────────────────────
@@ -798,8 +980,9 @@ function openMarkPaid(id){
 function confirmMarkPaid(id){
   const dp=e('mp-date')?.value;const mp=e('mp-method')?.value;
   if(!dp){showToast('Please enter a date');return;}
-  S.expenses=S.expenses.map(ex=>ex.id===id?{...ex,status:'paid',datePaid:dp,methodPaid:mp}:ex);
-  saveState();
+  let updated=null;
+  S.expenses=S.expenses.map(ex=>{if(ex.id===id){updated={...ex,status:'paid',datePaid:dp,methodPaid:mp};return updated;}return ex;});
+  if(updated)db.saveExpense(updated);
   closeModal();showToast('Payment marked as paid');renderNav();
   if(S.view==='pending')renderPending();
 }
@@ -807,7 +990,7 @@ function confirmMarkPaid(id){
 function delPayment(id){
   if(!confirm('Delete this payment?'))return;
   S.expenses=S.expenses.filter(ex=>ex.id!==id);
-  saveState();
+  db.delExpense(id);
   showToast('Deleted');renderDash();
 }
 
@@ -950,21 +1133,25 @@ function startNewRun(){
 // want to track recently-sent runs before tucking them away).
 function markRunSent(runId){
   const run=S.runs.find(r=>r.id===runId);if(!run)return;
-  S.runs=S.runs.map(r=>r.id===runId?{...r,sentAt:new Date().toISOString()}:r);
-  saveState();
+  let updated={...run,sentAt:new Date().toISOString()};
+  S.runs=S.runs.map(r=>r.id===runId?updated:r);
   if(confirm(`"${run.name}" marked as sent to partner.\n\nArchive it now?`)){
-    S.runs=S.runs.map(r=>r.id===runId?{...r,archived:true}:r);
-    saveState();
+    updated={...updated,archived:true};
+    S.runs=S.runs.map(r=>r.id===runId?updated:r);
+    db.saveRun(updated);
     showToast('Run sent and archived');
   }else{
+    db.saveRun(updated);
     showToast('Run marked sent');
   }
   renderRuns();
 }
 
 function unarchiveRun(runId){
-  S.runs=S.runs.map(r=>r.id===runId?{...r,archived:false}:r);
-  saveState();
+  const run=S.runs.find(r=>r.id===runId);if(!run)return;
+  const updated={...run,archived:false};
+  S.runs=S.runs.map(r=>r.id===runId?updated:r);
+  db.saveRun(updated);
   showToast('Run restored');
   renderRuns();
 }
@@ -983,18 +1170,23 @@ function toggleRunExp(id){
   renderRuns();setTimeout(()=>{const inp=e('run-name-input');if(inp)inp.value=S.runForm.name;},10);
 }
 
-function deleteRun(runId){
+async function deleteRun(runId){
   const run=S.runs.find(r=>r.id===runId);if(!run)return;
-  const linked=S.expenses.filter(ex=>ex.runId===runId).length;
-  if(!confirm(`Reverse "${run.name}"? ${linked} payment${linked!==1?'s':''} will return to Unsubmitted and the run will be removed.`))return;
+  const linked=S.expenses.filter(ex=>ex.runId===runId);
+  if(!confirm(`Reverse "${run.name}"? ${linked.length} payment${linked.length!==1?'s':''} will return to Unsubmitted and the run will be removed.`))return;
+  // Detach every linked expense (clear run_id) before deleting the run
+  // itself, otherwise the FK with ON DELETE SET NULL would also work but
+  // we'd lose ordering control. Update locally first, then persist.
+  const detached=linked.map(ex=>({...ex,runId:null}));
   S.expenses=S.expenses.map(ex=>ex.runId===runId?{...ex,runId:null}:ex);
   S.runs=S.runs.filter(r=>r.id!==runId);
-  saveState();
+  await db.saveExpenses(detached);
+  await db.delRun(runId);
   showToast('Run reversed');
   renderRuns();
 }
 
-function createRun(){
+async function createRun(){
   const{name,selectedIds}=S.runForm;
   if(!name.trim()||selectedIds.length===0)return;
   const sel=S.expenses.filter(ex=>selectedIds.includes(ex.id));
@@ -1006,8 +1198,11 @@ function createRun(){
     // with any code paths still reading them; only the active currency is set.
     totalGBP:cur==='GBP'?total:0,totalUSD:cur==='USD'?total:0};
   S.runs.push(run);
+  const linked=sel.map(ex=>({...ex,runId:run.id}));
   S.expenses=S.expenses.map(ex=>selectedIds.includes(ex.id)?{...ex,runId:run.id}:ex);
-  saveState();
+  // Insert the run first so the FK on expenses.run_id is satisfied.
+  await db.saveRun(run);
+  await db.saveExpenses(linked);
   S.creating=false;S.runForm={name:'',selectedIds:[]};
   showToast('Run created — ready to issue');
   renderRuns();
@@ -1334,15 +1529,32 @@ function exportData(){
 function importData(ev){
   const file=ev.target.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{
-    try{const d=JSON.parse(e.target.result);
-      if(d.expenses)S.expenses=d.expenses;
-      if(d.runs)S.runs=d.runs;
-      if(d.sheetsUrl)S.sheetsUrl=d.sheetsUrl;
-      saveState();
-      showToast(`Imported ${S.expenses.length} expenses, ${S.runs.length} runs`);
+  reader.onload=async e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      const expenses=Array.isArray(d.expenses)?d.expenses:[];
+      const runs=Array.isArray(d.runs)?d.runs:[];
+      if(d.sheetsUrl){S.sheetsUrl=d.sheetsUrl;localStorage.setItem(SHEETS_URL_KEY,d.sheetsUrl);}
+      // Push to Supabase first so the team sees it; realtime will then
+      // bring our own state into sync.
+      await db.bulkImport({expenses,runs});
+      // Optimistically update local state too — saves a round-trip flicker.
+      if(expenses.length){
+        const map=new Map(S.expenses.map(x=>[x.id,x]));
+        expenses.forEach(x=>map.set(x.id,x));
+        S.expenses=[...map.values()];
+      }
+      if(runs.length){
+        const map=new Map(S.runs.map(x=>[x.id,x]));
+        runs.forEach(x=>map.set(x.id,x));
+        S.runs=[...map.values()];
+      }
+      showToast(`Imported ${expenses.length} expenses, ${runs.length} runs`);
       renderAll();
-    }catch{showToast('Error reading file');}
+    }catch(err){
+      console.warn('importData failed:',err);
+      showToast('Import failed: '+(err.message||'invalid file'));
+    }
   };
   reader.readAsText(file);
 }
@@ -1388,7 +1600,11 @@ function saveSheetsUrl(){
   try{host=new URL(url).hostname;}
   catch{showToast("That doesn't look like a valid URL");return;}
   if(host!=='script.google.com'){showToast("That doesn't look like an Apps Script URL");return;}
-  S.sheetsUrl=url;saveState();closeModal();syncToSheets();
+  // Sheets URL is per-browser config — keep it in localStorage rather
+  // than Supabase; different teammates may have their own sheet.
+  S.sheetsUrl=url;
+  try{localStorage.setItem(SHEETS_URL_KEY,url);}catch{}
+  closeModal();syncToSheets();
 }
 function syncToSheets(){
   if(!S.sheetsUrl){openSheetsSetup();return;}
@@ -1417,16 +1633,92 @@ document.getElementById('nav').addEventListener('click',ev=>{
   if(nav)setView(nav.dataset.nav);
 });
 
-loadState();
-// If the URL hash already names a view (e.g. user reloaded on /#log), honour
-// it; otherwise replace the empty hash with the current default so back/
-// forward has a starting anchor to compare against.
-{
+// ── BOOT ──────────────────────────────────────────────────
+// Wait for auth (handled by the auth script in <head>); when the user
+// is signed in, bootApp() runs: load data from Supabase, set up
+// realtime, surface migration banner if there's leftover localStorage,
+// then render.
+function _renderUserPill(){
+  const foot=document.getElementById('sb-foot');
+  if(!foot)return;
+  const u=window._authedUser;
+  if(!u){foot.textContent='Hive Music Limited';return;}
+  foot.innerHTML=`<div style="font-size:10px;color:#888;line-height:1.3;word-break:break-all">${esc(u.email||'')}</div>
+    <button onclick="signOut()" style="margin-top:6px;background:transparent;border:none;color:#666;font-size:10px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline">Sign out</button>`;
+}
+
+async function bootApp(user){
+  window._authedUser=user;
+  _renderUserPill();
+  // Per-browser sheets URL.
+  try{S.sheetsUrl=localStorage.getItem(SHEETS_URL_KEY)||'';}catch{}
+  // Pull the legacy localStorage payload for the migration banner. It's
+  // shown on the dashboard if it exists; users click "Import" once and
+  // we clear it.
+  _legacyState=_readLegacyLocal();
+  // Load shared data from Supabase.
+  try{
+    await db.loadAll();
+  }catch(err){
+    console.warn('loadAll failed:',err);
+    showToast('⚠ Could not load data: '+(err.message||'check your connection'));
+  }
+  db.subscribe();
+  // Honour URL hash (back/forward anchor) before first render.
   const h=_viewFromHash();
   if(h.view&&h.view!==S.view){S.view=h.view;}
   history.replaceState({view:S.view},'','#'+S.view);
+  renderAll();
 }
-renderAll();
+
+// Surface bootApp on window so the auth script (which lives in a separate
+// <script> block above) can call it once the SIGNED_IN event fires.
+window.bootApp=bootApp;
+// If auth already completed before this main script finished parsing
+// (e.g. on a magic-link redirect with a fast network), the auth handler
+// will have set _authedUser without being able to call bootApp yet —
+// catch that here.
+if(window._authedUser&&!db._channel)bootApp(window._authedUser);
+
+document.getElementById('nav').addEventListener('click',ev=>{
+  const nav=ev.target.closest('[data-nav]');
+  if(nav)setView(nav.dataset.nav);
+});
+
+// Trigger the legacy import. Reads the in-memory _legacyState (already
+// loaded at boot), pushes everything to Supabase, then clears the local
+// payload so the banner doesn't reappear.
+async function migrateLegacy(){
+  if(!_legacyState)return;
+  const{expenses,runs}=_legacyState;
+  const btn=document.getElementById('migrate-btn');
+  if(btn){btn.disabled=true;btn.textContent='Importing…';}
+  try{
+    await db.bulkImport({expenses,runs});
+    // Optimistically merge.
+    const eMap=new Map(S.expenses.map(x=>[x.id,x]));
+    expenses.forEach(x=>eMap.set(x.id,x));
+    S.expenses=[...eMap.values()];
+    const rMap=new Map(S.runs.map(x=>[x.id,x]));
+    runs.forEach(x=>rMap.set(x.id,x));
+    S.runs=[...rMap.values()];
+    // Wipe the legacy payload — keep a marker so we don't re-prompt.
+    try{localStorage.removeItem(STORAGE_KEY);}catch{}
+    _legacyState=null;
+    showToast(`Imported ${expenses.length} expenses, ${runs.length} runs`);
+    renderAll();
+  }catch(err){
+    console.warn('migrateLegacy failed:',err);
+    showToast('Import failed: '+(err.message||'try again'));
+    if(btn){btn.disabled=false;btn.textContent='Import to Supabase';}
+  }
+}
+function dismissLegacy(){
+  if(!confirm('Discard the data sitting in this browser? This can\'t be undone — Export it first if you\'re unsure.'))return;
+  try{localStorage.removeItem(STORAGE_KEY);}catch{}
+  _legacyState=null;
+  renderAll();
+}
 </script>
 </body>
 </html>
