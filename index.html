@@ -257,7 +257,7 @@ const fmtAmt=(n,c='GBP')=>(c==='GBP'?'£':'$')+Number(n||0).toLocaleString('en-G
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const e=id=>document.getElementById(id);
 
-const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
+const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',runCurrency:'GBP',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
 
 // ── PERSISTENCE ───────────────────────────────────────────
 // Auto-save state to localStorage on every mutation, restore on load.
@@ -801,26 +801,50 @@ function delPayment(id){
 }
 
 // ── PAYMENT RUNS ──────────────────────────────────────────
+// Determine a run's currency. New runs are tagged at creation; legacy
+// runs (pre-currency-tag) infer from their linked expenses.
+function _runCur(run){
+  if(run.currency)return run.currency;
+  const linked=S.expenses.filter(ex=>ex.runId===run.id);
+  if(linked.length===0)return null;
+  const cs=[...new Set(linked.map(ex=>ex.currency).filter(Boolean))];
+  return cs.length===1?cs[0]:null; // null if mixed (legacy edge case)
+}
+
 function renderRuns(){
-  // Only paid expenses that have splits assigned can be added to a run —
-  // the .docx report needs participant rows to be useful.
-  const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&splitsReady(ex));
-  const paidTbd=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&!splitsReady(ex));
+  // Runs are scoped to a single currency at a time — partners get
+  // separate documents for GBP and USD. The active tab governs which
+  // expenses are eligible and which existing runs are shown.
+  const cur=S.runCurrency||'GBP';
+  const paidUnsubmitted=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&splitsReady(ex)&&ex.currency===cur);
+  const paidTbd=S.expenses.filter(ex=>ex.status==='paid'&&!ex.runId&&!splitsReady(ex)&&ex.currency===cur);
+  // Show runs whose currency matches; legacy mixed runs (null) show in
+  // both tabs so they're never hidden.
+  const visibleRuns=S.runs.filter(r=>{const c=_runCur(r);return c===cur||c===null;});
+
+  // Currency tab — sits above the heading row, like the dashboard tabs.
+  const tabBar=`<div class="card" style="padding:8px 14px;margin-bottom:12px">
+    <div class="flex gap2" style="align-items:center">
+      <span style="font-size:11px;color:#888;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Currency</span>
+      <div class="seg" style="width:140px">${['GBP','USD'].map(c=>`<div class="so${cur===c?' on':''}" onclick="S.runCurrency='${c}';S.creating=false;S.runForm={name:'',selectedIds:[]};renderRuns()">${c}</div>`).join('')}</div>
+    </div>
+  </div>`;
+
   if(S.creating){
     const{name,selectedIds}=S.runForm;
     const sel=paidUnsubmitted.filter(ex=>selectedIds.includes(ex.id));
-    const sGBP=sel.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
-    const sUSD=sel.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
-    let html=`<div style="max-width:660px"><div class="card">
+    const selTotal=sel.reduce((s,ex)=>s+ex.recoupableAmount,0);
+    let html=tabBar+`<div style="max-width:660px"><div class="card">
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Creating a <strong>${cur}</strong> run · only ${cur} expenses are eligible.</div>
       <div class="fg"><label class="fl">Run Name *</label>
-        <input class="fi" value="${esc(name)}" placeholder="e.g. Payment Request — Nov 2025" oninput="S.runForm.name=this.value;_syncRunButton()" id="run-name-input">
+        <input class="fi" value="${esc(name)}" placeholder="e.g. ${cur} Payment Request — ${new Date().toLocaleDateString('en-GB',{month:'short',year:'numeric'})}" oninput="S.runForm.name=this.value;_syncRunButton()" id="run-name-input">
       </div>
       <div class="flex aic" style="justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700">Select Paid Expenses</div>
+        <div style="font-size:13px;font-weight:700">Select Paid ${cur} Expenses</div>
         <button class="btn bg btn-sm" onclick="S.runForm.selectedIds=S.runForm.selectedIds.length===${paidUnsubmitted.length}?[]:${JSON.stringify(paidUnsubmitted.map(ex=>ex.id))};renderRuns()">${selectedIds.length===paidUnsubmitted.length?'Deselect all':'Select all'}</button>
       </div>`;
-    if(paidTbd.length>0)html+=`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#7a6500;margin-bottom:10px">⏳ ${paidTbd.length} paid expense${paidTbd.length!==1?'s':''} excluded — splits not assigned yet. Edit them from the Payments Log to include them.</div>`;
-    if(paidUnsubmitted.length===0)html+=`<div style="padding:16px;text-align:center;color:#bbb;font-size:12.5px">No unsubmitted paid expenses available</div>`;
+    if(paidTbd.length>0)html+=`<div style="background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#7a6500;margin-bottom:10px">⏳ ${paidTbd.length} ${cur} paid expense${paidTbd.length!==1?'s':''} excluded — splits not assigned yet.</div>`;
+    if(paidUnsubmitted.length===0)html+=`<div style="padding:16px;text-align:center;color:#bbb;font-size:12.5px">No unsubmitted paid ${cur} expenses available</div>`;
     else{
       html+=`<div style="border:1px solid #e5e5e5;border-radius:7px;overflow:hidden">`;
       paidUnsubmitted.forEach(ex=>{const chk=selectedIds.includes(ex.id);
@@ -830,18 +854,24 @@ function renderRuns(){
       });
       html+=`</div>`;
     }
-    if(sel.length>0)html+=`<div class="rtots mt-3">${sGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(sGBP,'GBP')}</div></div>`:''} ${sUSD>0?`<div class="rtot"><div class="rtl">USD Recoupable</div><div class="rtv" style="color:#5e7a00">${fmtAmt(sUSD,'USD')}</div></div>`:''}<div class="rtot"><div class="rtl">Items Selected</div><div class="rtv">${sel.length}</div></div></div>`;
+    if(sel.length>0)html+=`<div class="rtots mt-3">
+      <div class="rtot"><div class="rtl">${cur} Recoupable</div><div class="rtv" style="color:${cur==='GBP'?'#087b7a':'#8a8b03'}">${fmtAmt(selTotal,cur)}</div></div>
+      <div class="rtot"><div class="rtl">Items Selected</div><div class="rtv">${sel.length}</div></div>
+    </div>`;
     html+=`<div class="divider"></div><div class="flex gap2">
       <button class="btn bg" onclick="S.creating=false;renderRuns()">Cancel</button>
-      <button id="create-run-btn" class="btn bp" ${!name.trim()||sel.length===0?'disabled':''} onclick="createRun()">✓ Create Run</button>
+      <button id="create-run-btn" class="btn bp" ${!name.trim()||sel.length===0?'disabled':''} onclick="createRun()">✓ Create ${cur} Run</button>
     </div></div></div>`;
     e('content').innerHTML=html;return;
   }
-  let html=`<div class="sh"><div><div class="st">Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid expense${paidUnsubmitted.length!==1?'s':''}${paidTbd.length>0?` · ${paidTbd.length} pending splits`:''}</div>`:paidTbd.length>0?`<div class="ss">${paidTbd.length} paid expense${paidTbd.length!==1?'s':''} waiting on splits</div>`:''}</div>
-    <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="S.creating=true;renderRuns()">＋ New Run</button></div>`;
-  if(S.runs.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No runs yet.</div><div class="es">Log paid expenses first, then create a run</div></div>`;
-  [...S.runs].reverse().forEach(run=>{
+
+  let html=tabBar+`<div class="sh"><div><div class="st">${cur} Payment Runs</div>${paidUnsubmitted.length>0?`<div class="ss">${paidUnsubmitted.length} unsubmitted paid ${cur} expense${paidUnsubmitted.length!==1?'s':''}${paidTbd.length>0?` · ${paidTbd.length} pending splits`:''}</div>`:paidTbd.length>0?`<div class="ss">${paidTbd.length} paid ${cur} expense${paidTbd.length!==1?'s':''} waiting on splits</div>`:''}</div>
+    <button class="btn bp btn-sm" ${paidUnsubmitted.length===0?'disabled':''} onclick="S.creating=true;renderRuns()">＋ New ${cur} Run</button></div>`;
+  if(visibleRuns.length===0&&paidUnsubmitted.length===0)html+=`<div class="empty"><div class="ei">📄</div><div class="et">No ${cur} runs yet.</div><div class="es">Log paid ${cur} expenses first, then create a run</div></div>`;
+  [...visibleRuns].reverse().forEach(run=>{
     const runExps=S.expenses.filter(ex=>ex.runId===run.id);
+    const runTotal=runExps.reduce((s,ex)=>s+ex.recoupableAmount,0);
+    const runC=_runCur(run)||cur;
     html+=`<div class="rc"><div class="rc-h">
       <div><div style="font-weight:700">${esc(run.name)}</div><div style="font-size:11px;color:#888;margin-top:1px">Created ${fmtDate(run.createdAt?.split('T')[0])} · ${runExps.length} line items</div></div>
       <div class="flex gap2">
@@ -850,8 +880,7 @@ function renderRuns(){
         <button class="btn bd btn-sm" onclick="deleteRun('${run.id}')" title="Reverse this run and put its payments back to Unsubmitted">↶ Reverse</button>
       </div>
     </div><div class="rc-b"><div class="rtots">
-      ${run.totalGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(run.totalGBP,'GBP')}</div></div>`:''}
-      ${run.totalUSD>0?`<div class="rtot"><div class="rtl">USD Recoupable</div><div class="rtv" style="color:#5e7a00">${fmtAmt(run.totalUSD,'USD')}</div></div>`:''}
+      <div class="rtot"><div class="rtl">${runC} Recoupable</div><div class="rtv" style="color:${runC==='GBP'?'#087b7a':'#8a8b03'}">${fmtAmt(runTotal,runC)}</div></div>
       <div class="rtot"><div class="rtl">Line Items</div><div class="rtv">${runExps.length}</div></div>
     </div></div></div>`;
   });
@@ -887,9 +916,13 @@ function createRun(){
   const{name,selectedIds}=S.runForm;
   if(!name.trim()||selectedIds.length===0)return;
   const sel=S.expenses.filter(ex=>selectedIds.includes(ex.id));
-  const totalGBP=sel.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+ex.recoupableAmount,0);
-  const totalUSD=sel.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
-  const run={id:uid(),createdAt:new Date().toISOString(),name:name.trim(),expenseIds:[...selectedIds],totalGBP,totalUSD};
+  // Tag the run with its currency — only one currency per run from here on.
+  const cur=S.runCurrency||(sel[0]?sel[0].currency:'GBP');
+  const total=sel.reduce((s,ex)=>s+ex.recoupableAmount,0);
+  const run={id:uid(),createdAt:new Date().toISOString(),name:name.trim(),currency:cur,expenseIds:[...selectedIds],total,
+    // Keep legacy totalGBP/totalUSD fields populated for backward compat
+    // with any code paths still reading them; only the active currency is set.
+    totalGBP:cur==='GBP'?total:0,totalUSD:cur==='USD'?total:0};
   S.runs.push(run);
   S.expenses=S.expenses.map(ex=>selectedIds.includes(ex.id)?{...ex,runId:run.id}:ex);
   saveState();
