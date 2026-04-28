@@ -127,6 +127,12 @@ tbody tr:hover td{background:#fafafa}
 .pend-inv{border-top:1px solid #f0f0f0;padding:10px 14px;background:#fafafa}
 /* Note */
 .note-box{background:#fffdf0;border:1px solid #f0e68c;border-radius:6px;padding:7px 10px;font-size:12px;color:#7a6500;margin-top:4px}
+/* Autocomplete dropdown — replaces native <datalist> styling */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:50;background:#fff;border:1px solid #d0d0d0;border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 6px 18px rgba(0,0,0,.10)}
+.ac-item{padding:8px 11px;cursor:pointer;font-size:13px;line-height:1.3;border-bottom:1px solid #f3f3f3;user-select:none}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.active{background:#e6f4f4;color:#087b7a}
 
 /* ── BRAND PASS ───────────────────────────────────── */
 /* Open Sauce Sans, kerning -65 on body/headers, -55 on sub-headers, */
@@ -221,7 +227,7 @@ const fmtAmt=(n,c='GBP')=>(c==='GBP'?'£':'$')+Number(n||0).toLocaleString('en-G
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const e=id=>document.getElementById(id);
 
-const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
+const S={view:'dashboard',expenses:[],runs:[],form:null,filters:{search:'',currency:'all'},dashCurrency:'all',creating:false,runForm:{name:'',selectedIds:[]},expandedId:null,sheetsUrl:'',lastSynced:null};
 
 // ── PERSISTENCE ───────────────────────────────────────────
 // Auto-save state to localStorage on every mutation, restore on load.
@@ -339,13 +345,19 @@ function renderDash(){
   // output, and the Sheets sync payload.
   const gbp=paid.filter(ex=>ex.currency==='GBP').reduce((s,ex)=>s+(ex.amount||0),0);
   const usd=paid.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+(ex.amount||0),0);
-  const all=[...S.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const dashCur=S.dashCurrency||'all';
+  const all=[...S.expenses]
+    .filter(ex=>dashCur==='all'||ex.currency===dashCur)
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   let html=`<div class="stats">
     <div class="stat"><div class="s-lbl">Accumulated £</div><div class="s-val pk">${fmtAmt(gbp,'GBP')}</div></div>
     <div class="stat"><div class="s-lbl">Accumulated $</div><div class="s-val tl">${fmtAmt(usd,'USD')}</div></div>
   </div>`;
-  html+=`<div class="sh"><div class="st">All Entries.</div></div>`;
-  if(all.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet.</div><div class="es">Add your first payment to get started</div></div></div>`;
+  html+=`<div class="sh">
+    <div class="st">All Entries.</div>
+    <div class="seg" style="width:170px">${['all','GBP','USD'].map(c=>`<div class="so${dashCur===c?' on':''}" onclick="S.dashCurrency='${c}';renderDash()">${c==='all'?'All':c}</div>`).join('')}</div>
+  </div>`;
+  if(all.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">${S.expenses.length===0?'No payments yet.':'No '+dashCur+' entries yet.'}</div><div class="es">${S.expenses.length===0?'Add your first payment to get started':'Switch the filter to see other currencies'}</div></div></div>`;
   else{
     html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>`;
     all.forEach(ex=>{
@@ -387,8 +399,12 @@ function renderAddForm(){
   <div class="r2">
     <div class="fg">
       <label class="fl">Artist Name *</label>
-      <input class="fi" id="f-artist" data-field="artistName" value="${esc(f.artistName)}" placeholder="e.g. MOXO" list="artist-dl">
-      <datalist id="artist-dl">${artists.map(a=>`<option value="${esc(a)}">`).join('')}</datalist>
+      <div class="ac-wrap">
+        <input class="fi" id="f-artist" data-field="artistName" value="${esc(f.artistName)}" placeholder="e.g. MOXO" autocomplete="off"
+               onfocus="updateArtistAc(this.value)" oninput="updateArtistAc(this.value)"
+               onblur="setTimeout(hideArtistAc,150)" onkeydown="artistAcKey(event)">
+        <div class="ac-list" id="artist-ac-list" style="display:none"></div>
+      </div>
       ${f.errors.artistName?`<span class="fe">${f.errors.artistName}</span>`:''}
     </div>
     <div class="fg">
@@ -517,6 +533,47 @@ function updatePartTotal(){
   const cls=Math.abs(total-100)<0.001?'ok':total>100?'over':'warn';
   const msg=Math.abs(total-100)<0.001?'✓ 100% allocated':total>100?`⚠ Over by ${(total-100).toFixed(4)}%`:`${(100-total).toFixed(4)}% remaining`;
   el.className=`pt ${cls}`;el.innerHTML=`<span>${msg}</span><strong>${total.toFixed(4)}%</strong>`;
+}
+
+// ── Artist-name autocomplete ─────────────────────────────
+// Custom dropdown, replaces the native <datalist> "speech bubble" UI.
+// Uses mousedown+preventDefault on items so the input doesn't blur before
+// the click registers; otherwise blur would hide the list mid-click.
+let _acIdx=-1;
+function updateArtistAc(query){
+  const list=document.getElementById('artist-ac-list');
+  if(!list)return;
+  _acIdx=-1;
+  const q=(query||'').toLowerCase().trim();
+  const matches=getArtistNames().filter(n=>n.toLowerCase().includes(q)).slice(0,200);
+  if(matches.length===0){list.style.display='none';list.innerHTML='';return;}
+  list.innerHTML=matches.map(n=>`<div class="ac-item" data-name="${esc(n)}" onmousedown="event.preventDefault();pickArtistAc(this.dataset.name)">${esc(n)}</div>`).join('');
+  list.style.display='block';
+  list.scrollTop=0;
+}
+function pickArtistAc(name){
+  const inp=document.getElementById('f-artist');
+  if(inp){inp.value=name;if(S.form)S.form.artistName=name;}
+  hideArtistAc();
+}
+function hideArtistAc(){
+  const list=document.getElementById('artist-ac-list');
+  if(list){list.style.display='none';}
+  _acIdx=-1;
+}
+function artistAcKey(ev){
+  const list=document.getElementById('artist-ac-list');
+  if(!list||list.style.display==='none')return;
+  const items=list.querySelectorAll('.ac-item');
+  if(!items.length)return;
+  if(ev.key==='ArrowDown'){ev.preventDefault();_acIdx=Math.min(_acIdx+1,items.length-1);_acHighlight(items);}
+  else if(ev.key==='ArrowUp'){ev.preventDefault();_acIdx=Math.max(_acIdx-1,0);_acHighlight(items);}
+  else if(ev.key==='Enter'&&_acIdx>=0){ev.preventDefault();pickArtistAc(items[_acIdx].dataset.name);}
+  else if(ev.key==='Escape'){hideArtistAc();}
+}
+function _acHighlight(items){
+  items.forEach((el,i)=>el.classList.toggle('active',i===_acIdx));
+  if(_acIdx>=0)items[_acIdx].scrollIntoView({block:'nearest'});
 }
 
 function setFF(field,val){if(!S.form)return;syncFormInputs();S.form[field]=val;renderAddForm();}
