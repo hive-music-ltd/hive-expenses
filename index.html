@@ -1017,13 +1017,17 @@ function _mainTable(runExps){
     </w:p>
   </w:tc>`;
   const headerRow=`<w:tr><w:trPr><w:trHeight w:val="300"/></w:trPr>${hdrLabels.map(hdrCell).join('')}</w:tr>`;
-  const dataCell=lines=>{
+  // Alternating-row shading: odd-indexed data rows (2nd, 4th, 6th…) get
+  // a light D9D9D9 wash to aid scan-reading, matching the reference doc.
+  const dataCell=(lines,shaded)=>{
     const rPr=calRPr({sz:'18'});
     const inner=lines.map((t,i)=>(i===0?'':'<w:br/>')+`<w:t xml:space="preserve">${xmlEsc(t)}</w:t>`).join('');
+    const shd=shaded?`<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>`:'';
     return`<w:tc>
       <w:tcPr>
         <w:tcW w:w="0" w:type="auto"/>
         <w:tcBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="6" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/></w:tcBorders>
+        ${shd}
         <w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="45" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="45" w:type="dxa"/></w:tcMar>
       </w:tcPr>
       <w:p><w:pPr>${CAL_NIL_PBDR}<w:jc w:val="center"/><w:rPr>${rPr}</w:rPr></w:pPr>
@@ -1031,14 +1035,15 @@ function _mainTable(runExps){
       </w:p>
     </w:tc>`;
   };
-  const dataRows=runExps.map(ex=>{
+  const dataRows=runExps.map((ex,rowIdx)=>{
+    const shaded=rowIdx%2===1;
     const parts=ex.participants||[];
     const names=parts.map(p=>p.name||'');
     const shares=parts.map(p=>String(p.share));
     return`<w:tr><w:trPr><w:trHeight w:val="300"/></w:trPr>${
-      dataCell(names)+dataCell(shares)+dataCell([''])+
-      dataCell([String(ex.recoupablePercent)])+
-      dataCell([fmtAmt(ex.recoupableAmount,ex.currency)])
+      dataCell(names,shaded)+dataCell(shares,shaded)+dataCell([''],shaded)+
+      dataCell([String(ex.recoupablePercent)],shaded)+
+      dataCell([fmtAmt(ex.recoupableAmount,ex.currency)],shaded)
     }</w:tr>`;
   }).join('');
   return`<w:tbl>
