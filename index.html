@@ -347,15 +347,20 @@ function renderDash(){
   html+=`<div class="sh"><div class="st">All Entries.</div></div>`;
   if(all.length===0)html+=`<div class="card"><div class="empty"><div class="ei">💳</div><div class="et">No payments yet.</div><div class="es">Add your first payment to get started</div></div></div>`;
   else{
-    html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Recoupable</th><th>Status</th></tr></thead><tbody>`;
+    html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Recoupable</th><th>Status</th><th></th></tr></thead><tbody>`;
     all.forEach(ex=>{
       const run=ex.runId?S.runs.find(r=>r.id===ex.runId):null;
-      html+=`<tr style="cursor:pointer" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">
+      const exJson=JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      html+=`<tr>
         <td style="color:#888;font-size:11.5px;white-space:nowrap">${fmtDate(ex.datePaid||ex.date)}</td>
         <td style="font-weight:600">${esc(ex.artistName)}</td>
         <td style="color:#888">${esc(ex.expenseDescription)}</td>
         <td style="font-weight:700;color:#087b7a">${fmtAmt(ex.recoupableAmount,ex.currency)}</td>
         <td><span class="badge ${ex.status==='pending'?'brd':run?'bgr':'bgy'}">${ex.status==='pending'?'Needs Paying':run?'In Run':'Paid'}</span></td>
+        <td><div class="flex gap2" style="justify-content:flex-end">
+          <button class="btn bg btn-xs" onclick="setView('add',${exJson})" title="Edit">✎</button>
+          ${ex.status==='pending'?`<button class="btn bp btn-xs" onclick="openMarkPaid('${ex.id}')" title="Mark Paid">✓</button>`:''}
+        </div></td>
       </tr>`;
     });
     html+=`</tbody></table></div></div>`;
@@ -609,9 +614,9 @@ function renderLog(){
   }
 
   html+=`<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
-    <thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Amount</th><th>Recoup%</th><th>Recoupable</th><th>Method</th><th>Participants</th><th>Run</th><th></th></tr></thead>
+    <thead><tr><th>Date Paid</th><th>Artist</th><th>Description</th><th>Amount</th><th>Recoup%</th><th>Method</th><th>Participants</th><th>Run</th><th></th></tr></thead>
     <tbody>`;
-  if(exps.length===0)html+=`<tr><td colspan="10" style="text-align:center;padding:30px;color:#bbb">No results match filters</td></tr>`;
+  if(exps.length===0)html+=`<tr><td colspan="9" style="text-align:center;padding:30px;color:#bbb">No results match filters</td></tr>`;
   exps.forEach(ex=>{
     const run=ex.runId?S.runs.find(r=>r.id===ex.runId):null;
     const isExp=S.expandedId===ex.id;
@@ -621,14 +626,13 @@ function renderLog(){
       <td style="color:#555;max-width:120px;word-break:break-word">${esc(ex.expenseDescription)}</td>
       <td style="font-weight:600;white-space:nowrap">${fmtAmt(ex.amount,ex.currency)}</td>
       <td><span class="badge ${ex.recoupablePercent===100?'bpk':'bam'}">${ex.recoupablePercent}%</span></td>
-      <td style="font-weight:700;color:#087b7a;white-space:nowrap">${fmtAmt(ex.recoupableAmount,ex.currency)}</td>
       <td style="font-size:11px;color:#666">${ex.methodPaid||'—'}</td>
       <td>${splitsReady(ex)?`<button class="btn bg btn-xs" onclick="S.expandedId=S.expandedId==='${ex.id}'?null:'${ex.id}';renderLog()">${(ex.participants||[]).length}p ${isExp?'▲':'▼'}</button>`:`<span class="badge btbd" title="Splits not assigned yet">Splits TBD</span>`}</td>
       <td>${run?`<span class="badge bgr" style="font-size:10px;cursor:pointer" onclick="viewReport('${run.id}')">${esc(run.name.substring(0,18))}…</span>`:`<span class="badge bgy">Unsubmitted</span>`}</td>
       <td><div class="flex gap2">${!ex.runId?`<button class="btn bg btn-xs" onclick="setView('add',${JSON.stringify(ex).replace(/</g,'&lt;').replace(/"/g,'&quot;')})">Edit</button><button class="btn bd btn-xs" onclick="delPayment('${ex.id}')">🗑</button>`:''}</div></td>
     </tr>`;
     if(isExp){
-      html+=`<tr style="background:#fafafa"><td colspan="10" style="padding:8px 10px 12px">`;
+      html+=`<tr style="background:#fafafa"><td colspan="9" style="padding:8px 10px 12px">`;
       if(ex.note)html+=`<div class="note-box" style="margin-bottom:8px">📝 ${esc(ex.note)}</div>`;
       html+=`<div style="font-size:10.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Participant Splits</div><div style="display:flex;gap:24px;flex-wrap:wrap">`;
       (ex.participants||[]).forEach(p=>{html+=`<div style="font-size:12px"><strong>${esc(p.name)}</strong> <span style="color:#888;font-family:monospace">${p.share}%</span></div>`;});
@@ -730,7 +734,7 @@ function renderRuns(){
     const sUSD=sel.filter(ex=>ex.currency==='USD').reduce((s,ex)=>s+ex.recoupableAmount,0);
     let html=`<div style="max-width:660px"><div class="card">
       <div class="fg"><label class="fl">Run Name *</label>
-        <input class="fi" value="${esc(name)}" placeholder="e.g. Payment Request — Nov 2025" oninput="S.runForm.name=this.value" id="run-name-input">
+        <input class="fi" value="${esc(name)}" placeholder="e.g. Payment Request — Nov 2025" oninput="S.runForm.name=this.value;_syncRunButton()" id="run-name-input">
       </div>
       <div class="flex aic" style="justify-content:space-between;margin-bottom:8px">
         <div style="font-size:13px;font-weight:700">Select Paid Expenses</div>
@@ -750,7 +754,7 @@ function renderRuns(){
     if(sel.length>0)html+=`<div class="rtots mt-3">${sGBP>0?`<div class="rtot"><div class="rtl">GBP Recoupable</div><div class="rtv" style="color:#087b7a">${fmtAmt(sGBP,'GBP')}</div></div>`:''} ${sUSD>0?`<div class="rtot"><div class="rtl">USD Recoupable</div><div class="rtv" style="color:#5e7a00">${fmtAmt(sUSD,'USD')}</div></div>`:''}<div class="rtot"><div class="rtl">Items Selected</div><div class="rtv">${sel.length}</div></div></div>`;
     html+=`<div class="divider"></div><div class="flex gap2">
       <button class="btn bg" onclick="S.creating=false;renderRuns()">Cancel</button>
-      <button class="btn bp" ${!name.trim()||sel.length===0?'disabled':''} onclick="createRun()">✓ Create Run</button>
+      <button id="create-run-btn" class="btn bp" ${!name.trim()||sel.length===0?'disabled':''} onclick="createRun()">✓ Create Run</button>
     </div></div></div>`;
     e('content').innerHTML=html;return;
   }
@@ -773,6 +777,14 @@ function renderRuns(){
     </div></div></div>`;
   });
   e('content').innerHTML=html;
+}
+
+// Imperatively sync the Create Run button's disabled state when the name
+// input changes. Pre-rendered `disabled` attribute would otherwise stay
+// stale because we don't re-render on keystrokes (would lose focus).
+function _syncRunButton(){
+  const btn=document.getElementById('create-run-btn');
+  if(btn)btn.disabled=!S.runForm.name.trim()||S.runForm.selectedIds.length===0;
 }
 
 function toggleRunExp(id){
